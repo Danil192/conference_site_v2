@@ -1,0 +1,39 @@
+Создание папки backend
+
+Создание виртуального окружения
+py -m venv .venv
+
+Активация виртуального окружения
+.venv\Scripts\activate
+
+Создание файла зависимотей и активация его
+pip install -r requirements.txt
+
+Создание Django-поекта
+django-admin startproject conference_site .
+
+Создание приложения "Core"
+py manage.py startapp core
+
+ПРОВЕРКА
+py manage.py check
+
+Созданы файлы .env
+Там хранятся параметры для подключения к БД
+
+Добавлен код модели базы в core/models.py
+
+Создан файл serialaizer.py 
+Туда добавлен код для преобразования модели Django в JSON для API
+
+Создание представления views.py
+Они обрабатывают HTTP-запросы (GET, POST, PUT, DELETE) для каждой модели
+Вставил туда код
+
+Создание файла core/urls.py
+Нужен чтобы подключить все Вьюсеты к роутеру
+
+
+
+
+
