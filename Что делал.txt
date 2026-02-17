@@ -1,4 +1,5 @@
 Создание папки backend
+Перевход в папку backend
 
 Создание виртуального окружения
 py -m venv .venv
@@ -59,6 +60,33 @@ http://127.0.0.1:8000/admin
 
 УДАЛЕНИЕ МИГРАЦИЙ
 del core\migrations\0*.py
+
+
+
+Содание папки frontend
+Перевход в папку frontend
+
+Создание проекта Vue с Vite
+npm create vite@latest . -- --template vue
+
+установка базовых зависимостей
+npm install
+
+Установка дополнительных зависимостей
+npm install vue-router@4 axios pinia xlsx bootstrap
+npm install -D eslint prettier eslint-plugin-vue eslint-config-prettier
+
+Настройка vite.config.js
+написан код для перенаправления 
+
+Создание файлов .env и .env example
+
+Создание структуры папок в src
+Добавлены:
+router, services, views, stories
+
+В папку router добавлен файл index.js
+написан код для маршрутизации
 
 
 
