@@ -32,6 +32,35 @@ py manage.py check
 
 Создание файла core/urls.py
 Нужен чтобы подключить все Вьюсеты к роутеру
+Вставил в него код
+
+Обновление conference_site/urls.py проекта
+Вставлен код
+
+Обновлен setting.py
+Добавлен core в секцию INSTALLED_APPS
+
+ПРИМЕНЕНИЕ МИГРАЦИЙ
+python manage.py makemigrations
+python manage.py migrate
+
+Создание суперпользователя
+Логин: danil
+Пароль: danil123
+
+ЗАПУСК СЕРВЕРА Django
+python manage.py runserver
+http://127.0.0.1:8000/admin
+
+Создание моделей в админке (core/admin.py)
+Добавил туда код
+В админке django появились модели
+
+УДАЛЕНИЕ МИГРАЦИЙ
+del core\migrations\0*.py
+
+ОЧИСТКА БАЗЫ
+
 
 
 
