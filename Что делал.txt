@@ -45,6 +45,7 @@ python manage.py makemigrations
 python manage.py migrate
 
 Создание суперпользователя
+python manage.py createsuperuser
 Логин: danil
 Пароль: danil123
 
@@ -59,7 +60,7 @@ http://127.0.0.1:8000/admin
 УДАЛЕНИЕ МИГРАЦИЙ
 del core\migrations\0*.py
 
-ОЧИСТКА БАЗЫ
+
 
 
 

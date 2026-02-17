@@ -1,0 +1,27 @@
+Основные сущности:
+Konferentsiyas (Конференции)
+Uchastniks (Участники)
+Doklads (Доклады)
+Sekciyas (Секции)
+Programs (Контейнеры программ)
+Programmas (Позиции программы)
+
+Логистика:
+Prozhivanies (Проживание)
+Transfers (Трансферы)
+Uchastnik prozhivanies (Связь участников с проживанием)
+Uchastnik transfers (Связь участников с трансфером)
+Prozhivanie transfers (Связь проживания с трансфером)
+
+Финансовый модуль:
+Tarifs (Тарифы)
+Platezhs (Платежи)
+Schets (Счета)
+
+Дополнительно:
+Otkazs (Отказы)
+Email shablons (Шаблоны email)
+Uvedomlenie logs (Лог уведомлений)
+Profil polzovatelyas (Профили пользователей)
+
+Всего: 18 моделей

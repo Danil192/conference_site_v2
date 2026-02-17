@@ -52,7 +52,7 @@ class UchastnikAdmin(admin.ModelAdmin):
             'fields': ('familiya', 'name', 'otchestvo', 'email', 'telefon')
         }),
         ('Организационные данные', {
-            'fields': ('organizatsiya', 'gorod', 'doljnost', 'uchenaya_stepen', 'sektsiya', 'nuzen_transfer')
+            'fields': ('organizatsiya', 'gorod', 'doljnost', 'uchenaya_stepen', 'sektsiya', 'nuzhen_transfer')
         }),
         ('Участие в конференции', {
             'fields': ('konferentsiya', 'status_uchastnika', 'kommentarii')
