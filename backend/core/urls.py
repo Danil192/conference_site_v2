@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .views import ImportViewSet
 
 router = DefaultRouter()
 
@@ -29,6 +30,8 @@ router.register(r'uvedomlenie-log', views.UvedomlenieLogViewSet, basename='uvedo
 
 # Роли
 router.register(r'profili', views.ProfilPolzovatelyaViewSet, basename='profil')
+
+router.register(r'import', ImportViewSet, basename='import')
 
 urlpatterns = [
     path('', include(router.urls)),

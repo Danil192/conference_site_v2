@@ -89,4 +89,17 @@ export const programAPI = {
   delete: (id) => api.delete(`/programs/${id}/`),
 }
 
+// Импорт из Excel
+export const importAPI = {
+  participants: (file) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return api.post('/import/participants/', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    })
+  },
+}
+
 export default api

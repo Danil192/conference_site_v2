@@ -5,10 +5,16 @@
         <i class="bi bi-people"></i>
         Участники
       </h1>
-      <button class="btn btn-primary" @click="openModal()">
-        <i class="bi bi-plus-lg"></i>
-        Добавить
-      </button>
+      <div class="header-buttons">
+        <button class="btn btn-success me-2" @click="openImportModal()">
+          <i class="bi bi-file-earmark-excel"></i>
+          Импорт Excel
+        </button>
+        <button class="btn btn-primary" @click="openModal()">
+          <i class="bi bi-plus-lg"></i>
+          Добавить
+        </button>
+      </div>
     </div>
 
     <div class="filters-bar">
@@ -80,6 +86,7 @@
       </table>
     </div>
 
+    <!-- Модальное окно добавления/редактирования участника -->
     <div class="modal fade" ref="modalRef" tabindex="-1">
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -183,11 +190,72 @@
         </div>
       </div>
     </div>
+
+    <!-- Модальное окно импорта Excel -->
+    <div class="modal fade" ref="importModalRef" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">
+              <i class="bi bi-file-earmark-excel"></i>
+              Импорт участников из Excel
+            </h5>
+            <button type="button" class="btn-close" @click="closeImportModal()"></button>
+          </div>
+          <div class="modal-body">
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i>
+              <strong>Требования к файлу:</strong>
+              <ul class="mb-0 mt-2">
+                <li>Формат: .xlsx</li>
+                <li>Обязательные колонки: Фамилия, E-mail</li>
+                <li>Порядок: №, Дата подачи, Конференция, Статус, Комментарий, Фамилия, Имя, Отчество, Организация, Город, Учёная степень, Должность, Телефон, E-mail, Секция</li>
+                <li>Статус "Одобрена" → подтвердил участие</li>
+                <li>Секции и конференции создаются автоматически</li>
+              </ul>
+            </div>
+            
+            <div class="mb-3">
+              <label class="form-label">Выберите файл *</label>
+              <input type="file" class="form-control" accept=".xlsx" @change="onFileSelect" ref="fileInput">
+            </div>
+            
+            <div v-if="importStatus" :class="['alert', importStatus.success ? 'alert-success' : 'alert-danger']">
+              <div v-if="importStatus.success">
+                <i class="bi bi-check-circle"></i>
+                <strong>Успешно!</strong> Импортировано: {{ importStatus.imported }} участников, 
+                создано секций: {{ importStatus.sections_created }}, 
+                создано конференций: {{ importStatus.conferences_created }}
+              </div>
+              <div v-else>
+                <i class="bi bi-x-circle"></i>
+                <strong>Ошибка:</strong> {{ importStatus.error }}
+              </div>
+            </div>
+            
+            <div v-if="importStatus && importStatus.errors && importStatus.errors.length > 0" class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle"></i>
+              <strong>Ошибки:</strong>
+              <ul class="mb-0 mt-2">
+                <li v-for="(error, idx) in importStatus.errors" :key="idx">{{ error }}</li>
+              </ul>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="closeImportModal()">Отмена</button>
+            <button type="button" class="btn btn-success" @click="uploadFile()" :disabled="!selectedFile || isUploading">
+              <i class="bi bi-upload"></i>
+              {{ isUploading ? 'Загрузка...' : 'Импортировать' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { uchastnikAPI, konferentsiyaAPI, sekciyaAPI } from '../services/api'
+import { uchastnikAPI, konferentsiyaAPI, sekciyaAPI, importAPI } from '../services/api'
 import { Modal } from 'bootstrap'
 
 export default {
@@ -218,11 +286,16 @@ export default {
         kommentarii: ''
       },
       isEdit: false,
-      modal: null
+      modal: null,
+      importModal: null,
+      selectedFile: null,
+      importStatus: null,
+      isUploading: false
     }
   },
   mounted() {
     this.modal = new Modal(this.$refs.modalRef)
+    this.importModal = new Modal(this.$refs.importModalRef)
     this.fetchData()
     this.loadKonferentsiyas()
     this.loadSekciyas()
@@ -333,6 +406,51 @@ export default {
         console.error('Ошибка удаления:', error)
         alert('Ошибка при удалении')
       }
+    },
+    openImportModal() {
+      this.selectedFile = null
+      this.importStatus = null
+      this.isUploading = false
+      if (this.$refs.fileInput) {
+        this.$refs.fileInput.value = ''
+      }
+      this.importModal.show()
+    },
+    closeImportModal() {
+      this.importModal.hide()
+    },
+    onFileSelect(event) {
+      this.selectedFile = event.target.files[0]
+      this.importStatus = null
+    },
+    async uploadFile() {
+      if (!this.selectedFile) {
+        alert('Выберите файл')
+        return
+      }
+      
+      this.isUploading = true
+      this.importStatus = null
+      
+      try {
+        const response = await importAPI.participants(this.selectedFile)
+        this.importStatus = response.data
+        
+        if (response.data.success) {
+          setTimeout(() => {
+            this.closeImportModal()
+            this.fetchData()
+          }, 2000)
+        }
+      } catch (error) {
+        console.error('Ошибка импорта:', error)
+        this.importStatus = {
+          success: false,
+          error: error.response?.data?.error || 'Ошибка при импорте'
+        }
+      } finally {
+        this.isUploading = false
+      }
     }
   }
 }
@@ -342,6 +460,11 @@ export default {
 .page-container {
   max-width: 1400px;
   margin: 0 auto;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
 }
 
 .page-header {
