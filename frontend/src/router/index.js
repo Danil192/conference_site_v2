@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import Dashboard from '../views/Dashboard.vue'
 import KonferentsiyaList from '../views/KonferentsiyaList.vue'
+import KonferentsiyaDetail from '../views/KonferentsiyaDetail.vue'
 import UchastnikList from '../views/UchastnikList.vue'
 import SekciyaList from '../views/SekciyaList.vue'
 import DokladList from '../views/DokladList.vue'
@@ -20,6 +21,11 @@ const routes = [
     path: '/konferentsiyas',
     name: 'KonferentsiyaList',
     component: KonferentsiyaList
+  },
+    {
+    path: '/konferentsiyas/:id', 
+    name: 'KonferentsiyaDetail',
+    component: KonferentsiyaDetail
   },
   {
     path: '/uchastniks',

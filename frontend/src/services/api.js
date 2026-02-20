@@ -39,6 +39,7 @@ export const prozhivanieAPI = {
 // Секции
 export const sekciyaAPI = {
   getAll: () => api.get('/sekciyas/'),
+  getById: (id) => api.get(`/sekciyas/${id}/`),
   create: (data) => api.post('/sekciyas/', data),
   update: (id, data) => api.put(`/sekciyas/${id}/`, data),
   delete: (id) => api.delete(`/sekciyas/${id}/`),

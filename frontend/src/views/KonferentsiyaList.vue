@@ -43,7 +43,11 @@
         </thead>
         <tbody>
           <tr v-for="item in items" :key="item.id">
-            <td>{{ item.nazvanie }}</td>
+            <td>
+            <router-link :to="`/konferentsiyas/${item.id}`" class="conference-link">
+                {{ item.nazvanie }}
+            </router-link>
+            </td>
             <td>{{ formatDate(item.data_nachala) }}</td>
             <td>{{ formatDate(item.data_okonchaniya) }}</td>
             <td>
@@ -223,6 +227,18 @@ export default {
 </script>
 
 <style scoped>
+.conference-link {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.conference-link:hover {
+  color: #2980b9;
+  text-decoration: underline;
+}
+
 .page-container {
   max-width: 1400px;
   margin: 0 auto;

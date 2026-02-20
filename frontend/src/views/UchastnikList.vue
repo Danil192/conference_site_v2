@@ -51,9 +51,8 @@
             <th>Email</th>
             <th>Организация</th>
             <th>Город</th>
+            <th>Номер телефона</th>
             <th>Статус</th>
-            <th>Конференция</th>
-            <th class="text-end">Действия</th>
           </tr>
         </thead>
         <tbody>
@@ -62,6 +61,7 @@
             <td>{{ item.email }}</td>
             <td>{{ item.organizatsiya }}</td>
             <td>{{ item.gorod }}</td>
+            <td>{{ item.telefon }}</td>
             <td>
               <span :class="['status-badge', 'status-' + item.status_uchastnika]">
                 {{ getStatusLabel(item.status_uchastnika) }}
