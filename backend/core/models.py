@@ -34,16 +34,21 @@ class Konferentsiya(models.Model):
 
 class Sekciya(models.Model):
     nazvanie = models.CharField(max_length=255)
-    konferentsiya = models.ForeignKey(Konferentsiya, on_delete=models.CASCADE, related_name='sekciyas')
+    konferentsiya = models.ForeignKey(
+        Konferentsiya, 
+        on_delete=models.CASCADE, 
+        related_name='sekciyas'
+    )
     opisanie = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
         db_table = 'sekciya'
-        unique_together = ('nazvanie', 'konferentsiya')
+        ordering = ['nazvanie']
+        unique_together = ('nazvanie', 'konferentsiya') 
     
     def __str__(self):
-        return f"{self.nazvanie} ({self.konferentsiya.nazvanie if self.konferentsiya else '—'})"
+        return f"{self.nazvanie}"
 
 
 class Prozhivanie(models.Model):

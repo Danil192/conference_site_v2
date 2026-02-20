@@ -396,12 +396,13 @@ export default {
     },
     
     async loadSections() {
-      try {
-        const response = await sekciyaAPI.getAll()
+    try {
+        const response = await sekciyaAPI.getAll(this.conferenceId)
         this.sections = response.data.results || response.data
-      } catch (error) {
+        this.stats.sections = this.sections.length
+    } catch (error) {
         console.error('Ошибка загрузки секций:', error)
-      }
+    }
     },
     
     async loadReports() {

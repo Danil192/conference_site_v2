@@ -187,8 +187,17 @@ class KonferentsiyaViewSet(viewsets.ModelViewSet):
 class SekciyaViewSet(viewsets.ModelViewSet):
     queryset = Sekciya.objects.all()
     serializer_class = SekciyaSerializer
-    filter_backends = [filters.SearchFilter]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['konferentsiya']
     search_fields = ['nazvanie']
+    
+    def get_queryset(self):
+        """Фильтруем секции по конференции из query params"""
+        queryset = Sekciya.objects.all()
+        konferentsiya_id = self.request.query_params.get('konferentsiya', None)
+        if konferentsiya_id:
+            queryset = queryset.filter(konferentsiya_id=konferentsiya_id)
+        return queryset
 
 
 class ProzhivanieViewSet(viewsets.ModelViewSet):

@@ -625,17 +625,14 @@ export default {
         
         // 2. Создаём секции
         for (const sekciya of this.wizardData.sekciyas) {
-          try {
-            const existing = await sekciyaAPI.getAll()
-            const exists = existing.data.results?.some(s => s.nazvanie.toLowerCase() === sekciya.nazvanie.toLowerCase()) ||
-                          existing.data.some?.(s => s.nazvanie.toLowerCase() === sekciya.nazvanie.toLowerCase())
-            
-            if (!exists) {
-              await sekciyaAPI.create({ nazvanie: sekciya.nazvanie })
-            }
-          } catch (e) {
+        try {
+            await sekciyaAPI.create({ 
+            nazvanie: sekciya.nazvanie,
+            konferentsiya: conferenceId
+            })
+        } catch (e) {
             console.warn(`Не удалось создать секцию "${sekciya.nazvanie}":`, e)
-          }
+        }
         }
         
         // 3. Обновляем участников (привязываем к конференции)

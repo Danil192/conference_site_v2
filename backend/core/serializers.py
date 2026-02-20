@@ -15,9 +15,12 @@ class KonferentsiyaSerializer(serializers.ModelSerializer):
 
 
 class SekciyaSerializer(serializers.ModelSerializer):
+    konferentsiya_nazvanie = serializers.CharField(source='konferentsiya.nazvanie', read_only=True)
+    
     class Meta:
         model = Sekciya
-        fields = '__all__'
+        fields = ['id', 'nazvanie', 'konferentsiya', 'konferentsiya_nazvanie', 'opisanie', 'created_at']
+        read_only_fields = ['created_at']
 
 
 class ProzhivanieSerializer(serializers.ModelSerializer):

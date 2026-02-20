@@ -21,6 +21,12 @@
           @input="fetchData"
         >
       </div>
+      <select v-model="konferentsiyaFilter" @change="fetchData" class="form-select">
+        <option value="">Все конференции</option>
+        <option v-for="konf in konferentsiyas" :key="konf.id" :value="konf.id">
+          {{ konf.nazvanie }}
+        </option>
+      </select>
     </div>
 
     <div class="table-container">
@@ -29,6 +35,7 @@
           <tr>
             <th>Название</th>
             <th>Описание</th>
+            <th>Конференция</th>
             <th class="text-end">Действия</th>
           </tr>
         </thead>
@@ -36,6 +43,7 @@
           <tr v-for="item in items" :key="item.id">
             <td>{{ item.nazvanie }}</td>
             <td>{{ item.opisanie || '—' }}</td>
+            <td>{{ item.konferentsiya_nazvanie || '—' }}</td>
             <td class="text-end">
               <button class="btn btn-sm btn-outline-primary me-1" @click="editItem(item)">
                 <i class="bi bi-pencil"></i>
@@ -46,7 +54,7 @@
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="3" class="text-center text-muted py-4">
+            <td colspan="4" class="text-center text-muted py-4">
               Нет данных
             </td>
           </tr>
@@ -68,6 +76,15 @@
                 <input type="text" class="form-control" v-model="form.nazvanie" required>
               </div>
               <div class="mb-3">
+                <label class="form-label">Конференция *</label>
+                <select class="form-select" v-model="form.konferentsiya" required>
+                  <option value="" disabled>Выберите конференцию</option>
+                  <option v-for="konf in konferentsiyas" :key="konf.id" :value="konf.id">
+                    {{ konf.nazvanie }}
+                  </option>
+                </select>
+              </div>
+              <div class="mb-3">
                 <label class="form-label">Описание</label>
                 <textarea class="form-control" v-model="form.opisanie" rows="3"></textarea>
               </div>
@@ -84,7 +101,7 @@
 </template>
 
 <script>
-import { sekciyaAPI } from '../services/api'
+import { sekciyaAPI, konferentsiyaAPI } from '../services/api'
 import { Modal } from 'bootstrap'
 
 export default {
@@ -92,10 +109,13 @@ export default {
   data() {
     return {
       items: [],
+      konferentsiyas: [],
       searchQuery: '',
+      konferentsiyaFilter: '',
       form: {
         id: null,
         nazvanie: '',
+        konferentsiya: null,
         opisanie: ''
       },
       isEdit: false,
@@ -105,12 +125,16 @@ export default {
   mounted() {
     this.modal = new Modal(this.$refs.modalRef)
     this.fetchData()
+    this.loadKonferentsiyas()
   },
   methods: {
     async fetchData() {
       try {
-        const response = await sekciyaAPI.getAll()
+        // ✅ Используем sekciyaAPI.getAll с фильтром по конференции
+        const response = await sekciyaAPI.getAll(this.konferentsiyaFilter || null)
         let data = response.data.results || response.data
+        
+        // Фильтрация по поиску (на клиенте)
         if (this.searchQuery) {
           data = data.filter(item => 
             item.nazvanie.toLowerCase().includes(this.searchQuery.toLowerCase())
@@ -122,25 +146,46 @@ export default {
         alert('Не удалось загрузить данные')
       }
     },
+    
+    async loadKonferentsiyas() {
+      try {
+        const response = await konferentsiyaAPI.getAll()
+        this.konferentsiyas = response.data.results || response.data
+      } catch (error) {
+        console.error('Ошибка загрузки конференций:', error)
+      }
+    },
+    
     openModal(item = null) {
       this.isEdit = !!item
       if (item) {
-        this.form = { ...item }
+        // ✅ При редактировании копируем все поля, включая konferentsiya
+        this.form = { 
+          id: item.id,
+          nazvanie: item.nazvanie,
+          konferentsiya: item.konferentsiya,
+          opisanie: item.opisanie || ''
+        }
       } else {
+        // ✅ При создании сбрасываем форму полностью
         this.form = {
           id: null,
           nazvanie: '',
+          konferentsiya: null,
           opisanie: ''
         }
       }
       this.modal.show()
     },
+    
     closeModal() {
       this.modal.hide()
     },
+    
     editItem(item) {
       this.openModal(item)
     },
+    
     async saveItem() {
       try {
         if (this.isEdit) {
@@ -153,9 +198,10 @@ export default {
         alert('Сохранено успешно')
       } catch (error) {
         console.error('Ошибка сохранения:', error)
-        alert('Ошибка при сохранении')
+        alert('Ошибка при сохранении: ' + (error.response?.data?.error || error.message))
       }
     },
+    
     async deleteItem(id) {
       if (!confirm('Удалить секцию?')) return
       try {
