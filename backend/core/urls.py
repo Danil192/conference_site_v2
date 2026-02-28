@@ -2,6 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
 from .views import ProzhivanieStatistikaView, SettlementViewSet, TransferStatistikaView
+from .views import ProgramPDFView
 
 router = DefaultRouter()
 
@@ -39,7 +40,9 @@ router.register(r'settlement', views.SettlementViewSet, basename='settlement')
 urlpatterns = [
     path('', include(router.urls)),
     path('import/participants/', views.ImportViewSet.as_view({'post': 'participants'}), name='import-participants'),
-    
+    path('konferentsiyas/<int:konferentsiya_id>/program-pdf/', 
+         ProgramPDFView.as_view(), 
+         name='program-pdf'),
     path('konferentsiyas/<int:konferentsiya_id>/prozhivanie-stats/', 
          ProzhivanieStatistikaView.as_view(), 
          name='prozhivanie-stats'),

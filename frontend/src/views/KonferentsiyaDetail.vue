@@ -350,9 +350,14 @@
         <div class="tab-pane fade" id="program-tab">
           <div class="tab-header">
             <h5><i class="bi bi-calendar-week"></i> Программа конференции</h5>
-            <router-link to="/programmas" class="btn btn-sm btn-primary">
-              <i class="bi bi-plus"></i> Добавить мероприятие
-            </router-link>
+            <div class="header-actions">
+              <button class="btn btn-sm btn-danger me-2" @click="downloadProgramPDF()">
+                <i class="bi bi-file-earmark-pdf"></i> Скачать PDF
+              </button>
+              <router-link to="/programmas" class="btn btn-sm btn-primary">
+                <i class="bi bi-plus"></i> Добавить мероприятие
+              </router-link>
+            </div>
           </div>
           
           <div v-if="programItems.length > 0" class="program-timeline">
@@ -697,6 +702,27 @@ export default {
   },
   
   methods: {
+
+    // ========== PDF ПРОГРАММА ==========
+  
+  async downloadProgramPDF() {
+     try {
+      const url = `/api/konferentsiyas/${this.conferenceId}/program-pdf/`
+      
+      // Создаём ссылку для скачивания
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `program_${this.conference.nazvanie}.pdf`
+      link.target = '_blank'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+    } catch (error) {
+      console.error('Ошибка скачивания PDF:', error)
+      alert('Ошибка при скачивании программы: ' + error.message)
+    }
+  },
     // ========== ЗАГРУЗКА ДАННЫХ ==========
     
     async loadData() {

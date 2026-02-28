@@ -11,6 +11,20 @@ from django.utils import timezone
 from datetime import datetime
 from .permissions import AllowAnyIfDebug, IsAdminOrOrganizer, IsAuthenticatedReadOnly
 from django.db.models import Q
+from django.http import HttpResponse
+from django.template.loader import render_to_string
+from datetime import timedelta
+from xhtml2pdf import pisa
+from io import BytesIO
+from xhtml2pdf.default import DEFAULT_CSS
+from xhtml2pdf.files import pisaFileObject
+import os
+from reportlab.pdfgen import canvas
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+import io
 
 from .models import (
     Konferentsiya, Uchastnik, Prozhivanie, Transfer, Doklad,
@@ -825,3 +839,101 @@ class SettlementViewSet(viewsets.ViewSet):
             return Response({'error': 'Участник не найден'}, status=404)
         except Exception as e:
             return Response({'error': str(e)}, status=400)
+
+
+# ========== ГЕНЕРАЦИЯ PDF ==========
+
+class ProgramPDFView(APIView):
+    """Генерация программы конференции в PDF"""
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, konferentsiya_id):
+        try:
+            font_path = os.path.join(os.path.dirname(__file__), '..', 'fonts', 'DejaVuSans.ttf')
+            
+            # Если шрифт не найден, используем системный Arial
+            if not os.path.exists(font_path):
+                font_path = 'C:/Windows/Fonts/arial.ttf'
+            
+            try:
+                pdfmetrics.registerFont(TTFont('DejaVuSans', font_path))
+            except:
+                pass
+            
+            conference = Konferentsiya.objects.get(id=konferentsiya_id)
+            sections = Sekciya.objects.filter(konferentsiya=conference).order_by('nazvanie')
+            participants = Uchastnik.objects.filter(konferentsiya=conference)
+            
+            # Получаем доклады по секциям
+            sections_data = []
+            total_reports = 0
+            
+            for section in sections:
+                reports = Doklad.objects.filter(
+                    uchastnik__sektsiya=section,
+                    uchastnik__konferentsiya=conference
+                ).select_related('uchastnik').order_by('nazvanie')
+                
+                reports_data = []
+                for report in reports:
+                    reports_data.append({
+                        'doklad_nazvanie': report.nazvanie or 'Доклад',
+                        'uchastnik_fio': f"{report.uchastnik.familiya} {report.uchastnik.name} {report.uchastnik.otchestvo}".strip(),
+                        'organizatsiya': report.uchastnik.organizatsiya,
+                        'gorod': report.uchastnik.gorod
+                    })
+                    total_reports += 1
+                
+                sections_data.append({
+                    'nazvanie': section.nazvanie,
+                    'reports': reports_data
+                })
+            
+            # Длительность конференции
+            duration_days = (conference.data_okonchaniya - conference.data_nachala).days + 1
+            
+            # Контекст для шаблона
+            context = {
+                'conference': conference,
+                'sections': sections_data,
+                'duration_days': duration_days,
+                'participants_count': participants.count(),
+                'sections_count': sections.count(),
+                'reports_count': total_reports,
+                'generated_at': timezone.now()
+            }
+            
+            # Рендерим HTML
+            html_string = render_to_string('core/program_pdf.html', context)
+            
+            # Создаём PDF ответ
+            response = HttpResponse(content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="program_{conference.id}.pdf"'
+
+            pisa_status = pisa.CreatePDF(
+                html_string,
+                dest=response,
+                encoding='utf-8',
+                default_css=DEFAULT_CSS + '''
+                    @font-face {
+                        font-family: "DejaVuSans";
+                        src: "file:///%s";
+                    }
+                    body {
+                        font-family: "DejaVuSans", Arial, sans-serif;
+                    }
+                ''' % font_path.replace('\\', '/')
+            )
+            
+            if pisa_status.err:
+                return HttpResponse('Ошибка при генерации PDF', status=500)
+            
+            return response
+            
+        except Konferentsiya.DoesNotExist:
+            return Response({'error': 'Конференция не найдена'}, status=404)
+        except Exception as e:
+            import traceback
+            print(f"PDF Error: {str(e)}")
+            print(traceback.format_exc())
+            return Response({'error': str(e)}, status=500)

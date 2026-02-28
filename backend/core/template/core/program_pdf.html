@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        @font-face {
+            font-family: "DejaVuSans";
+            src: "file:///C:/Windows/Fonts/arial.ttf";
+        }
+        
+        body {
+            font-family: "DejaVuSans", Arial, sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            color: #000;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .conference-title {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .conference-dates {
+            font-size: 12pt;
+            color: #333;
+        }
+        
+        .info-box {
+            background: #f5f5f5;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+        }
+        
+        .info-item {
+            display: inline-block;
+            margin-right: 20px;
+            font-weight: bold;
+        }
+        
+        .section {
+            margin-top: 20px;
+            page-break-inside: avoid;
+        }
+        
+        .section-title {
+            font-size: 13pt;
+            font-weight: bold;
+            background: #333;
+            color: #fff;
+            padding: 5px 10px;
+            margin-bottom: 10px;
+        }
+        
+        .report {
+            margin-bottom: 8px;
+            padding-left: 10px;
+            border-left: 2px solid #ccc;
+        }
+        
+        .report-title {
+            font-weight: bold;
+        }
+        
+        .report-author {
+            color: #555;
+            font-style: italic;
+            margin-top: 2px;
+        }
+        
+        .no-reports {
+            color: #999;
+            font-style: italic;
+            padding-left: 10px;
+        }
+        
+        .footer {
+            text-align: center;
+            font-size: 9pt;
+            color: #666;
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="conference-title">{{ conference.nazvanie }}</div>
+        <div class="conference-dates">
+            {{ conference.data_nachala|date:"d.m.Y" }} — {{ conference.data_okonchaniya|date:"d.m.Y" }}
+        </div>
+    </div>
+    
+    <div class="info-box">
+        <span class="info-item">Дней: {{ duration_days }}</span>
+        <span class="info-item">Участников: {{ participants_count }}</span>
+        <span class="info-item">Секций: {{ sections_count }}</span>
+        <span class="info-item">Докладов: {{ reports_count }}</span>
+    </div>
+    
+    {% for section in sections %}
+    <div class="section">
+        <div class="section-title">{{ section.nazvanie }}</div>
+        
+        {% if section.reports %}
+            {% for report in section.reports %}
+            <div class="report">
+                <div class="report-title">{{ report.doklad_nazvanie }}</div>
+                <div class="report-author">
+                    {{ report.uchastnik_fio }}
+                    {% if report.organizatsiya %}({{ report.organizatsiya }}){% endif %}
+                    {% if report.gorod %}, {{ report.gorod }}{% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="no-reports">Доклады не заявлены</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    
+    <div class="footer">
+        Сгенерировано: {{ generated_at|date:"d.m.Y H:i" }}
+    </div>
+</body>
+</html>

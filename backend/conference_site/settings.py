@@ -65,7 +65,7 @@ ROOT_URLCONF = 'conference_site.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'core' / 'template'], 
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -182,3 +182,5 @@ DATA_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024  # 10 MB
 
 # Разрешённые расширения файлов
 ALLOWED_EXTENSIONS = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'odt', 'ods', 'odp']
+
+WEASYPRINT_CSS_FILENAMES = True
