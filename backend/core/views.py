@@ -699,28 +699,24 @@ class SettlementViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Участники конференции, которым нужно проживание
         participants = Uchastnik.objects.filter(
             konferentsiya_id=konferentsiya_id
         ).select_related('sektsiya')
         
-        # Получаем IDs уже заселённых участников
         settled_ids = UchastnikProzhivanie.objects.filter(
             uchastnik__konferentsiya_id=konferentsiya_id
         ).values_list('uchastnik_id', flat=True)
         
-        # Фильтруем только не заселённых
         participants = participants.exclude(id__in=settled_ids)
         
         serializer = UchastnikSerializer(participants, many=True)
         return Response(serializer.data)
-    
+
     @action(detail=False, methods=['get'])
     def accommodations(self, request):
         """Получить варианты проживания для конференции с группировкой"""
         konferentsiya_id = request.query_params.get('konferentsiya')
         
-        # Если конференция не указана, возвращаем все проживания
         if konferentsiya_id:
             prozhivaniya = Prozhivanie.objects.filter(
                 konferentsiya_id=konferentsiya_id
@@ -730,7 +726,6 @@ class SettlementViewSet(viewsets.ViewSet):
                 'turbaza_nazvanie', 'kategoriya_nomerov'
             )
         
-        # Группировка по турбазам
         result = {}
         for proj in prozhivaniya:
             turbaza = proj.turbaza_nazvanie or 'Без турбазы'
@@ -755,7 +750,7 @@ class SettlementViewSet(viewsets.ViewSet):
             })
         
         return Response(result)
-    
+
     @action(detail=False, methods=['post'])
     def settle(self, request):
         """Заселить участника в проживание"""
@@ -766,14 +761,12 @@ class SettlementViewSet(viewsets.ViewSet):
             uchastnik = Uchastnik.objects.get(id=uchastnik_id)
             prozhivanie = Prozhivanie.objects.get(id=prozhivanie_id)
             
-            # Проверка: уже заселен?
             if UchastnikProzhivanie.objects.filter(uchastnik=uchastnik).exists():
                 return Response(
                     {'error': 'Участник уже заселен'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Проверка: есть ли свободные места?
             free_places = prozhivanie.vmestimost - prozhivanie.mesta_zanyaty
             if free_places <= 0:
                 return Response(
@@ -781,13 +774,11 @@ class SettlementViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Создаём связь
             UchastnikProzhivanie.objects.create(
                 uchastnik=uchastnik,
                 prozhivanie=prozhivanie,
             )
             
-            # Обновляем счётчик занятых мест
             prozhivanie.mesta_zanyaty += 1
             prozhivanie.save()
             
@@ -807,7 +798,7 @@ class SettlementViewSet(viewsets.ViewSet):
             return Response({'error': 'Проживание не найдено'}, status=404)
         except Exception as e:
             return Response({'error': str(e)}, status=400)
-    
+
     @action(detail=False, methods=['post'])
     def vacate(self, request):
         """Выселить участника"""
@@ -826,7 +817,6 @@ class SettlementViewSet(viewsets.ViewSet):
             prozhivanie = svyaz.prozhivanie
             svyaz.delete()
             
-            # Обновляем счётчик
             prozhivanie.mesta_zanyaty = max(0, prozhivanie.mesta_zanyaty - 1)
             prozhivanie.save()
             
@@ -840,8 +830,149 @@ class SettlementViewSet(viewsets.ViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
+    @action(detail=False, methods=['get'])
+    def transfers_available(self, request):
+        """Получить варианты трансфера для конференции"""
+        konferentsiya_id = request.query_params.get('konferentsiya')
+        
+        if not konferentsiya_id:
+            return Response(
+                {'error': 'Требуется параметр konferentsiya'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        transfers = Transfer.objects.filter(
+            konferentsiya_id=konferentsiya_id
+        ).order_by('tip_transfera', 'mesto_vstrechi')
+        
+        result = []
+        for transfer in transfers:
+            result.append({
+                'id': transfer.id,
+                'tip_transfera': transfer.tip_transfera,
+                'mesto_vstrechi': transfer.mesto_vstrechi,
+                'vmestimost': transfer.vmestimost,
+                'mesta_zanyaty': transfer.mesta_zanyaty,
+                'mesta_svobodnye': max(0, transfer.vmestimost - transfer.mesta_zanyaty),
+                'procent_zanyatosti': round(
+                    (transfer.mesta_zanyaty / transfer.vmestimost * 100)
+                    if transfer.vmestimost > 0 else 0, 1
+                )
+            })
+        
+        return Response(result)
 
-# ========== ГЕНЕРАЦИЯ PDF ==========
+    @action(detail=False, methods=['get'])
+    def transfers_assigned(self, request):
+        """Получить назначенных участников на трансферы"""
+        konferentsiya_id = request.query_params.get('konferentsiya')
+        
+        if not konferentsiya_id:
+            return Response(
+                {'error': 'Требуется параметр konferentsiya'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        assigned = UchastnikTransfer.objects.filter(
+            uchastnik__konferentsiya_id=konferentsiya_id
+        ).select_related('uchastnik', 'transfer')
+        
+        result = [
+            {
+                'uchastnik_id': a.uchastnik_id,
+                'transfer_id': a.transfer_id,
+                'uchastnik_fio': f"{a.uchastnik.familiya} {a.uchastnik.name}",
+                'transfer_tip': a.transfer.tip_transfera
+            }
+            for a in assigned
+        ]
+        
+        return Response(result)
+
+    @action(detail=False, methods=['post'])
+    def assign_transfer(self, request):
+        """Назначить участника на трансфер"""
+        uchastnik_id = request.data.get('uchastnik_id')
+        transfer_id = request.data.get('transfer_id')
+        
+        try:
+            uchastnik = Uchastnik.objects.get(id=uchastnik_id)
+            transfer = Transfer.objects.get(id=transfer_id)
+            
+            if UchastnikTransfer.objects.filter(
+                uchastnik=uchastnik,
+                transfer=transfer
+            ).exists():
+                return Response(
+                    {'error': 'Участник уже назначен на этот трансфер'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            free_places = transfer.vmestimost - transfer.mesta_zanyaty
+            if free_places <= 0:
+                return Response(
+                    {'error': 'Нет свободных мест в этом трансфере'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            UchastnikTransfer.objects.create(
+                uchastnik=uchastnik,
+                transfer=transfer
+            )
+            
+            transfer.mesta_zanyaty += 1
+            transfer.save()
+            
+            return Response({
+                'success': True,
+                'message': f'{uchastnik.familiya} {uchastnik.name} назначен на {transfer.tip_transfera}',
+                'transfer': {
+                    'id': transfer.id,
+                    'mesta_zanyaty': transfer.mesta_zanyaty,
+                    'mesta_svobodnye': max(0, transfer.vmestimost - transfer.mesta_zanyaty)
+                }
+            })
+            
+        except Uchastnik.DoesNotExist:
+            return Response({'error': 'Участник не найден'}, status=404)
+        except Transfer.DoesNotExist:
+            return Response({'error': 'Трансфер не найден'}, status=404)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+    @action(detail=False, methods=['post'])
+    def unassign_transfer(self, request):
+        """Отменить назначение участника на трансфер"""
+        uchastnik_id = request.data.get('uchastnik_id')
+        
+        try:
+            uchastnik = Uchastnik.objects.get(id=uchastnik_id)
+            svyaz = UchastnikTransfer.objects.filter(uchastnik=uchastnik).first()
+            
+            if not svyaz:
+                return Response(
+                    {'error': 'Участник не назначен на трансфер'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            transfer = svyaz.transfer
+            svyaz.delete()
+            
+            transfer.mesta_zanyaty = max(0, transfer.mesta_zanyaty - 1)
+            transfer.save()
+            
+            return Response({
+                'success': True,
+                'message': f'{uchastnik.familiya} {uchastnik.name} снят с трансфера'
+            })
+            
+        except Uchastnik.DoesNotExist:
+            return Response({'error': 'Участник не найден'}, status=404)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+
+# ========== ГЕНЕРАЦИЯ PDF (ОТДЕЛЬНЫЙ КЛАСС) ==========
 
 class ProgramPDFView(APIView):
     """Генерация программы конференции в PDF"""
@@ -851,7 +982,6 @@ class ProgramPDFView(APIView):
         try:
             font_path = os.path.join(os.path.dirname(__file__), '..', 'fonts', 'DejaVuSans.ttf')
             
-            # Если шрифт не найден, используем системный Arial
             if not os.path.exists(font_path):
                 font_path = 'C:/Windows/Fonts/arial.ttf'
             
@@ -864,7 +994,6 @@ class ProgramPDFView(APIView):
             sections = Sekciya.objects.filter(konferentsiya=conference).order_by('nazvanie')
             participants = Uchastnik.objects.filter(konferentsiya=conference)
             
-            # Получаем доклады по секциям
             sections_data = []
             total_reports = 0
             
@@ -889,10 +1018,8 @@ class ProgramPDFView(APIView):
                     'reports': reports_data
                 })
             
-            # Длительность конференции
             duration_days = (conference.data_okonchaniya - conference.data_nachala).days + 1
             
-            # Контекст для шаблона
             context = {
                 'conference': conference,
                 'sections': sections_data,
@@ -903,13 +1030,11 @@ class ProgramPDFView(APIView):
                 'generated_at': timezone.now()
             }
             
-            # Рендерим HTML
             html_string = render_to_string('core/program_pdf.html', context)
             
-            # Создаём PDF ответ
             response = HttpResponse(content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="program_{conference.id}.pdf"'
-
+            
             pisa_status = pisa.CreatePDF(
                 html_string,
                 dest=response,

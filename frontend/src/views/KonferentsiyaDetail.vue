@@ -6,9 +6,6 @@
         <i class="bi bi-arrow-left"></i> Назад
       </button>
       <div class="header-actions">
-        <button class="btn btn-outline-primary" @click="editConference()">
-          <i class="bi bi-pencil"></i> Редактировать
-        </button>
         <button class="btn btn-outline-danger" @click="deleteConference()">
           <i class="bi bi-trash"></i> Удалить
         </button>
@@ -421,9 +418,14 @@
                   <span class="stat-label">Запланировано</span>
                 </div>
               </div>
-              <router-link to="/transfers" class="btn btn-sm btn-outline-primary mt-3">
-                Управление
-              </router-link>
+              <div class="d-flex gap-2 mt-3">
+                <router-link to="/transfers" class="btn btn-sm btn-outline-primary flex-grow-1">
+                  Управление
+                </router-link>
+                <button class="btn btn-sm btn-success flex-grow-1" @click="openTransferDistributionModal()">
+                  <i class="bi bi-person-fill-up"></i> Распределение
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -605,12 +607,182 @@
         </div>
       </div>
     </div>
+    
+    <!-- Модальное окно распределения трансфера -->
+    <div class="modal fade modal-xl" ref="transferDistributionModalRef" tabindex="-1">
+      <div class="modal-dialog modal-fullscreen-lg-down">
+        <div class="modal-content">
+          <div class="modal-header bg-success text-white">
+            <h5 class="modal-title">
+              <i class="bi bi-bus-front"></i> Распределение участников по трансферу
+            </h5>
+            <button type="button" class="btn-close btn-close-white" @click="closeTransferDistributionModal()"></button>
+          </div>
+          
+          <div class="modal-body p-0">
+            <div class="row g-0 h-100">
+              <!-- ЛЕВАЯ КОЛОНКА: Участники -->
+              <div class="col-lg-5 border-end">
+                <div class="p-3 border-bottom bg-light">
+                  <h6 class="mb-2"><i class="bi bi-people"></i> Участники без трансфера</h6>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input 
+                      type="text" 
+                      class="form-control" 
+                      v-model="transferSearch"
+                      placeholder="Поиск по ФИО, email..."
+                      @input="filterTransferParticipants"
+                    >
+                  </div>
+                  <div class="mt-2 text-muted small">
+                    Найдено: {{ filteredTransferParticipants.length }} из {{ availableTransferParticipants.length }}
+                  </div>
+                </div>
+                
+                <div class="transfer-participants-list p-2" style="max-height: calc(100vh - 250px); overflow-y: auto;">
+                  <div 
+                    v-for="participant in filteredTransferParticipants" 
+                    :key="participant.id"
+                    class="transfer-participant-card mb-2"
+                    draggable="true"
+                    @dragstart="onTransferDragStart($event, participant)"
+                    @dragend="onTransferDragEnd"
+                  >
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-grip-vertical text-muted"></i>
+                      <div class="flex-grow-1">
+                        <div class="fw-semibold">{{ participant.familiya }} {{ participant.name }}</div>
+                        <div class="small text-muted">{{ participant.email }}</div>
+                        <div v-if="participant.nuzhen_transfer" class="small">
+                          <span class="badge bg-warning text-dark">Нужен трансфер</span>
+                        </div>
+                      </div>
+                      <i class="bi bi-arrows-move text-success"></i>
+                    </div>
+                  </div>
+                  
+                  <div v-if="filteredTransferParticipants.length === 0" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox fs-1"></i>
+                    <p class="mt-2">Нет доступных участников</p>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- ПРАВАЯ КОЛОНКА: Трансферы -->
+              <div class="col-lg-7">
+                <div class="p-3 border-bottom bg-light">
+                  <h6 class="mb-2"><i class="bi bi-bus-front"></i> Варианты трансфера</h6>
+                  <div class="d-flex gap-2">
+                    <select v-model="transferTypeFilter" class="form-select form-select-sm" @change="filterTransfers">
+                      <option value="">Все типы</option>
+                      <option value="автобус">Автобус</option>
+                      <option value="маршрутка">Маршрутка</option>
+                      <option value="такси">Такси</option>
+                      <option value="индивидуально">Индивидуально</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div class="transfers-list p-3" style="max-height: calc(100vh - 250px); overflow-y: auto;">
+                  <div 
+                    v-for="transfer in filteredTransfers" 
+                    :key="transfer.id"
+                    class="transfer-card p-3 mb-3 border rounded"
+                    :class="{
+                      'border-success bg-success-subtle': transfer.mesta_svobodnye > 0,
+                      'border-danger bg-danger-subtle': transfer.mesta_svobodnye === 0
+                    }"
+                    @dragover.prevent="onTransferDragOver($event)"
+                    @drop="onTransferDrop($event, transfer)"
+                  >
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                      <div>
+                        <div class="fw-semibold">
+                          <i :class="getTransferIcon(transfer.tip_transfera)"></i>
+                          {{ transfer.tip_transfera }}
+                        </div>
+                        <div class="small text-muted">
+                          <i class="bi bi-geo-alt"></i> {{ transfer.mesto_vstrechi }}
+                        </div>
+                      </div>
+                      <div class="text-end">
+                        <span 
+                          class="badge" 
+                          :class="transfer.mesta_svobodnye > 0 ? 'bg-success' : 'bg-danger'"
+                        >
+                          {{ transfer.mesta_zanyaty }}/{{ transfer.vmestimost }}
+                        </span>
+                        <div class="small text-muted mt-1">
+                          Свободно: {{ transfer.mesta_svobodnye }}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- Прогресс-бар заполненности -->
+                    <div class="progress mb-2" style="height: 6px;">
+                      <div 
+                        class="progress-bar" 
+                        :class="getTransferProgressClass(transfer.mesta_zanyaty / transfer.vmestimost)"
+                        :style="{ width: `${(transfer.mesta_zanyaty / transfer.vmestimost) * 100}%` }"
+                      ></div>
+                    </div>
+                    
+                    <!-- Статус -->
+                    <div v-if="transfer.mesta_svobodnye === 0" class="text-danger small">
+                      <i class="bi bi-x-circle"></i> Мест нет
+                    </div>
+                    <div v-else class="text-success small">
+                      <i class="bi bi-check-circle"></i> {{ transfer.mesta_svobodnye }} мест свободно
+                    </div>
+                    
+                    <!-- Подсказка для drag-and-drop -->
+                    <div v-if="draggedTransferParticipant && transfer.mesta_svobodnye > 0" 
+                         class="mt-2 small text-primary">
+                      <i class="bi bi-plus-circle"></i> Перетащите участника сюда
+                    </div>
+                    
+                    <!-- Список уже назначенных участников -->
+                    <div v-if="getAssignedParticipants(transfer.id).length > 0" class="mt-3">
+                      <div class="small text-muted mb-1">Назначенные участники:</div>
+                      <div class="d-flex flex-wrap gap-1">
+                        <span 
+                          v-for="p in getAssignedParticipants(transfer.id)" 
+                          :key="p.id"
+                          class="badge bg-secondary"
+                        >
+                          {{ p.familiya }} {{ p.name[0] }}.
+                          <i class="bi bi-x ms-1" style="cursor: pointer;" @click="unassignParticipant(p.id, transfer.id)"></i>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div v-if="filteredTransfers.length === 0" 
+                       class="text-center text-muted py-4">
+                    <i class="bi bi-bus-front fs-1"></i>
+                    <p class="mt-2">Нет вариантов трансфера</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="closeTransferDistributionModal()">Закрыть</button>
+            <button type="button" class="btn btn-outline-success" @click="refreshTransferDistributionData()">
+              <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 import { konferentsiyaAPI, uchastnikAPI, sekciyaAPI, dokladAPI, programmaAPI, prozhivanieAPI, transferAPI } from '../services/api'
-import axios from 'axios'  // ✅ Добавлен импорт axios
+import axios from 'axios'
 import { Modal } from 'bootstrap'
 
 export default {
@@ -662,67 +834,38 @@ export default {
       settlementSearch: '',
       turbazaFilter: '',
       categoryFilter: '',
-      draggedParticipant: null
+      draggedParticipant: null,
+      // Для модального окна распределения трансфера
+      transferDistributionModal: null,
+      availableTransferParticipants: [],
+      filteredTransferParticipants: [],
+      availableTransfers: [],
+      filteredTransfers: [],
+      transferSearch: '',
+      transferTypeFilter: '',
+      draggedTransferParticipant: null,
+      assignedTransferParticipants: {}
     }
   },
   
   computed: {
     sortedProgramItems() {
-      return [...this.programItems].sort((a, b) =>
+      return [...this.programItems].sort((a, b) => 
         new Date(a.vremya_nachala) - new Date(b.vremya_nachala)
       )
-    },
-    
-    // Группировка докладов по секциям
-    reportsBySection() {
-      const groups = {}
-      this.reports.forEach(report => {
-        const sectionId = report.sektsiya || 'no-section'
-        const sectionName = report.sektsiya_nazvanie || 'Без секции'
-        if (!groups[sectionId]) {
-          groups[sectionId] = {
-            sectionId: sectionId,
-            sectionName: sectionName,
-            reports: []
-          }
-        }
-        groups[sectionId].reports.push(report)
-      })
-      return Object.values(groups)
     }
   },
   
   mounted() {
-    // Инициализация модальных окон
     this.addParticipantModal = new Modal(this.$refs.addParticipantModalRef)
     this.settlementModal = new Modal(this.$refs.settlementModalRef)
+    this.transferDistributionModal = new Modal(this.$refs.transferDistributionModalRef)
     
     this.conferenceId = this.$route.params.id
     this.loadData()
   },
   
   methods: {
-
-    // ========== PDF ПРОГРАММА ==========
-  
-  async downloadProgramPDF() {
-     try {
-      const url = `/api/konferentsiyas/${this.conferenceId}/program-pdf/`
-      
-      // Создаём ссылку для скачивания
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `program_${this.conference.nazvanie}.pdf`
-      link.target = '_blank'
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      
-    } catch (error) {
-      console.error('Ошибка скачивания PDF:', error)
-      alert('Ошибка при скачивании программы: ' + error.message)
-    }
-  },
     // ========== ЗАГРУЗКА ДАННЫХ ==========
     
     async loadData() {
@@ -878,51 +1021,28 @@ export default {
     },
     
     async loadSettlementData() {
-  try {
-    console.log('Загрузка данных расселения для конференции:', this.conferenceId)
-    
-    // Загрузка доступных участников
-    const participantsResponse = await uchastnikAPI.getAll()
-    const allParticipants = participantsResponse.data.results || participantsResponse.data
-    
-    // Загружаем заселённых участников
-    const settledResponse = await axios.get(
-      `settlement/available/`,
-      { params: { konferentsiya: this.conferenceId } }
-    )
-    const settledData = settledResponse.data.results || settledResponse.data
-    const settledIds = Array.isArray(settledData) ? settledData.map(p => p.id) : []
-    
-    console.log('Заселённые участники IDs:', settledIds)
-    
-    // Фильтруем: только участники этой конференции и не заселённые
-    this.availableParticipants = allParticipants.filter(p => 
-      p.konferentsiya == this.conferenceId && !settledIds.includes(p.id)
-    )
-    this.filteredAvailableParticipants = [...this.availableParticipants]
-    
-    console.log('Доступно участников:', this.availableParticipants.length)
-    
-    // Загрузка вариантов проживания
-    const accommodationsResponse = await axios.get(
-      `settlement/accommodations/`,
-      { params: { konferentsiya: this.conferenceId } }
-    )
-    
-    console.log('Ответ API проживания:', accommodationsResponse.data)
-    console.log('Ключи объекта:', Object.keys(accommodationsResponse.data))
-    
-    this.groupedAccommodations = accommodationsResponse.data
-    this.filteredAccommodations = { ...this.groupedAccommodations }
-    
-    console.log('Вариантов проживания (турбаз):', Object.keys(this.groupedAccommodations).length)
-    
-  } catch (error) {
-    console.error('Ошибка загрузки данных расселения:', error)
-    console.error('Ответ сервера:', error.response?.data)
-    alert('Не удалось загрузить данные для расселения: ' + error.message)
-  }
-},
+      try {
+        const participantsResponse = await uchastnikAPI.getAll()
+        const allParticipants = participantsResponse.data.results || participantsResponse.data
+        this.availableParticipants = allParticipants.filter(p => 
+          p.konferentsiya == this.conferenceId && 
+          p.nuzhen_prozhivanie && 
+          !p.has_prozhivanie
+        )
+        this.filteredAvailableParticipants = [...this.availableParticipants]
+        
+        const accommodationsResponse = await axios.get(
+          'settlement/accommodations/',
+          { params: { konferentsiya: this.conferenceId } }
+        )
+        this.groupedAccommodations = accommodationsResponse.data
+        this.filteredAccommodations = { ...this.groupedAccommodations }
+        
+      } catch (error) {
+        console.error('Ошибка загрузки данных расселения:', error)
+        alert('Не удалось загрузить данные для расселения: ' + error.message)
+      }
+    },
     
     async refreshSettlementData() {
       await this.loadSettlementData()
@@ -939,7 +1059,7 @@ export default {
     
     filterAvailableParticipants() {
       const search = this.settlementSearch.toLowerCase()
-      this.filteredAvailableParticipants = this.availableParticipants.filter(p =>
+      this.filteredAvailableParticipants = this.availableParticipants.filter(p => 
         p.familiya.toLowerCase().includes(search) ||
         p.name.toLowerCase().includes(search) ||
         p.email.toLowerCase().includes(search)
@@ -950,13 +1070,11 @@ export default {
       const filtered = {}
       for (const [turbaza, data] of Object.entries(this.groupedAccommodations)) {
         if (this.turbazaFilter && turbaza !== this.turbazaFilter) continue
-        
         const categories = {}
         for (const [category, prozhivaniya] of Object.entries(data.categories)) {
           if (this.categoryFilter && category !== this.categoryFilter) continue
           categories[category] = prozhivaniya
         }
-        
         if (Object.keys(categories).length > 0) {
           filtered[turbaza] = { ...data, categories }
         }
@@ -974,13 +1092,10 @@ export default {
       return 'bg-high'
     },
     
-    // ========== DRAG AND DROP ==========
-    
     onDragStart(event, participant) {
       this.draggedParticipant = participant
       event.dataTransfer.setData('text/plain', participant.id)
       event.dataTransfer.effectAllowed = 'move'
-      
       const el = event.target.closest('.participant-card')
       if (el) el.classList.add('dragging')
     },
@@ -994,7 +1109,6 @@ export default {
     onDragOver(event) {
       event.preventDefault()
       event.dataTransfer.dropEffect = 'move'
-      
       const el = event.target.closest('.accommodation-card')
       if (el && !el.classList.contains('drag-over')) {
         el.classList.add('drag-over')
@@ -1003,27 +1117,21 @@ export default {
     
     async onDrop(event, prozhivanie) {
       event.preventDefault()
-      
       const cards = document.querySelectorAll('.accommodation-card')
       cards.forEach(card => card.classList.remove('drag-over'))
       
       if (!this.draggedParticipant) return
-      
-      // Проверка: есть ли места?
       if (prozhivanie.mesta_svobodnye <= 0) {
         alert('В этом варианте проживания нет свободных мест!')
         return
       }
       
-      // Подтверждение
       const confirmMsg = `Заселить ${this.draggedParticipant.familiya} ${this.draggedParticipant.name} в "${prozhivanie.nazvanie}"?`
       if (!confirm(confirmMsg)) return
       
       try {
-        console.log('Заселение участника:', this.draggedParticipant.id, 'в проживание:', prozhivanie.id)
-        
         const response = await axios.post(
-          `settlement/settle/`,
+          'settlement/settle/',
           {
             uchastnik_id: this.draggedParticipant.id,
             prozhivanie_id: prozhivanie.id
@@ -1032,39 +1140,259 @@ export default {
         
         const result = response.data
         
-        if (result.success) {
+        if (response.status === 200) {
           alert(result.message)
-          
-          // Обновляем счётчик в карточке проживания
           prozhivanie.mesta_zanyaty = result.prozhivanie.mesta_zanyaty
           prozhivanie.mesta_svobodnye = result.prozhivanie.mesta_svobodnye
           
-          // Удаляем участника из списка доступных
           this.availableParticipants = this.availableParticipants.filter(
             p => p.id !== this.draggedParticipant.id
           )
           this.filteredAvailableParticipants = this.filteredAvailableParticipants.filter(
             p => p.id !== this.draggedParticipant.id
           )
-          
-          // Обновляем статистику
           this.stats.accommodation++
-          
-          console.log('Участник успешно заселён')
         } else {
           alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'))
         }
-        
       } catch (error) {
         console.error('Ошибка заселения:', error)
-        console.error('Ответ сервера:', error.response?.data)
         alert('Ошибка при заселении участника: ' + (error.response?.data?.error || error.message))
       }
-      
       this.draggedParticipant = null
     },
     
+    // ========== РАСПРЕДЕЛЕНИЕ ТРАНСФЕРА ==========
+    
+    async openTransferDistributionModal() {
+      await this.loadTransferDistributionData()
+      this.transferDistributionModal.show()
+    },
+    
+    closeTransferDistributionModal() {
+      this.transferDistributionModal.hide()
+      this.resetTransferFilters()
+    },
+    
+    async loadTransferDistributionData() {
+      try {
+        const participantsResponse = await uchastnikAPI.getAll()
+        const allParticipants = participantsResponse.data.results || participantsResponse.data
+        
+        const conferenceParticipants = allParticipants.filter(p => 
+          p.konferentsiya == this.conferenceId
+        )
+        
+        const assignedResponse = await axios.get(
+          'settlement/transfers/assigned/',
+          { params: { konferentsiya: this.conferenceId } }
+        )
+        const assignedIds = assignedResponse.data.map(a => a.uchastnik_id)
+        
+        this.availableTransferParticipants = conferenceParticipants.filter(p => 
+          !assignedIds.includes(p.id)
+        )
+        this.filteredTransferParticipants = [...this.availableTransferParticipants]
+        
+        const transfersResponse = await axios.get(
+          'settlement/transfers_available/',
+          { params: { konferentsiya: this.conferenceId } }
+        )
+        this.availableTransfers = transfersResponse.data
+        this.filteredTransfers = [...this.availableTransfers]
+        
+      } catch (error) {
+        console.error('Ошибка загрузки данных трансфера:', error)
+        alert('Не удалось загрузить данные для распределения трансфера: ' + error.message)
+      }
+    },
+    
+    async refreshTransferDistributionData() {
+      await this.loadTransferDistributionData()
+      alert('Данные обновлены')
+    },
+    
+    resetTransferFilters() {
+      this.transferSearch = ''
+      this.transferTypeFilter = ''
+      this.filteredTransferParticipants = [...this.availableTransferParticipants]
+      this.filteredTransfers = [...this.availableTransfers]
+    },
+    
+    filterTransferParticipants() {
+      const search = this.transferSearch.toLowerCase()
+      this.filteredTransferParticipants = this.availableTransferParticipants.filter(p => 
+        p.familiya.toLowerCase().includes(search) ||
+        p.name.toLowerCase().includes(search) ||
+        p.email.toLowerCase().includes(search)
+      )
+    },
+    
+    filterTransfers() {
+      if (this.transferTypeFilter) {
+        this.filteredTransfers = this.availableTransfers.filter(t => 
+          t.tip_transfera === this.transferTypeFilter
+        )
+      } else {
+        this.filteredTransfers = [...this.availableTransfers]
+      }
+    },
+    
+    getTransferIcon(type) {
+      const icons = {
+        'автобус': 'bi bi-bus-front',
+        'маршрутка': 'bi bi-car-front',
+        'такси': 'bi bi-taxi-front',
+        'индивидуально': 'bi bi-person'
+      }
+      return icons[type] || 'bi bi-bus-front'
+    },
+    
+    getTransferProgressClass(ratio) {
+      if (ratio < 0.5) return 'bg-success'
+      if (ratio < 0.9) return 'bg-warning'
+      return 'bg-danger'
+    },
+    
+    getAssignedParticipants(transferId) {
+      return this.assignedTransferParticipants[transferId] || []
+    },
+    
+    onTransferDragStart(event, participant) {
+      this.draggedTransferParticipant = participant
+      event.dataTransfer.setData('text/plain', participant.id)
+      event.dataTransfer.effectAllowed = 'move'
+      const el = event.target.closest('.transfer-participant-card')
+      if (el) el.classList.add('dragging')
+    },
+    
+    onTransferDragEnd(event) {
+      const el = event.target.closest('.transfer-participant-card')
+      if (el) el.classList.remove('dragging')
+      this.draggedTransferParticipant = null
+    },
+    
+    onTransferDragOver(event) {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      const el = event.target.closest('.transfer-card')
+      if (el && !el.classList.contains('drag-over')) {
+        el.classList.add('drag-over')
+      }
+    },
+    
+    async onTransferDrop(event, transfer) {
+      event.preventDefault()
+      const cards = document.querySelectorAll('.transfer-card')
+      cards.forEach(card => card.classList.remove('drag-over'))
+      
+      if (!this.draggedTransferParticipant) return
+      if (transfer.mesta_svobodnye <= 0) {
+        alert('В этом трансфере нет свободных мест!')
+        return
+      }
+      
+      const confirmMsg = `Назначить ${this.draggedTransferParticipant.familiya} ${this.draggedTransferParticipant.name} на ${transfer.tip_transfera} (${transfer.mesto_vstrechi})?`
+      if (!confirm(confirmMsg)) return
+      
+      try {
+        const response = await axios.post(
+          'settlement/assign_transfer/',
+          {
+            uchastnik_id: this.draggedTransferParticipant.id,
+            transfer_id: transfer.id
+          }
+        )
+        
+        const result = response.data
+        
+        if (result.success) {
+          alert(result.message)
+          transfer.mesta_zanyaty = result.transfer.mesta_zanyaty
+          transfer.mesta_svobodnye = result.transfer.mesta_svobodnye
+          
+          this.availableTransferParticipants = this.availableTransferParticipants.filter(
+            p => p.id !== this.draggedTransferParticipant.id
+          )
+          this.filteredTransferParticipants = this.filteredTransferParticipants.filter(
+            p => p.id !== this.draggedTransferParticipant.id
+          )
+          
+          if (!this.assignedTransferParticipants[transfer.id]) {
+            this.$set(this.assignedTransferParticipants, transfer.id, [])
+          }
+          this.assignedTransferParticipants[transfer.id].push(this.draggedTransferParticipant)
+          
+          this.stats.transfers++
+        } else {
+          alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'))
+        }
+      } catch (error) {
+        console.error('Ошибка назначения на трансфер:', error)
+        alert('Ошибка при назначении участника на трансфер: ' + (error.response?.data?.error || error.message))
+      }
+      this.draggedTransferParticipant = null
+    },
+    
+    async unassignParticipant(participantId, transferId) {
+      if (!confirm('Снять участника с трансфера?')) return
+      
+      try {
+        const response = await axios.post(
+          'settlement/unassign_transfer/',
+          { uchastnik_id: participantId }
+        )
+        
+        const result = response.data
+        
+        if (result.success) {
+          alert(result.message)
+          
+          const transfer = this.availableTransfers.find(t => t.id === transferId)
+          if (transfer) {
+            transfer.mesta_zanyaty = Math.max(0, transfer.mesta_zanyaty - 1)
+            transfer.mesta_svobodnye = Math.max(0, transfer.vmestimost - transfer.mesta_zanyaty)
+          }
+          
+          const participant = this.assignedTransferParticipants[transferId]?.find(p => p.id === participantId)
+          if (participant && !this.availableTransferParticipants.find(p => p.id === participantId)) {
+            this.availableTransferParticipants.push(participant)
+            this.filteredTransferParticipants.push(participant)
+          }
+          
+          if (this.assignedTransferParticipants[transferId]) {
+            this.assignedTransferParticipants[transferId] = this.assignedTransferParticipants[transferId].filter(
+              p => p.id !== participantId
+            )
+          }
+          
+          this.stats.transfers = Math.max(0, this.stats.transfers - 1)
+        } else {
+          alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'))
+        }
+      } catch (error) {
+        console.error('Ошибка отмены назначения:', error)
+        alert('Ошибка при отмене назначения: ' + error.message)
+      }
+    },
+    
     // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
+    
+    async downloadProgramPDF() {
+      try {
+        const url = `/api/konferentsiyas/${this.conferenceId}/program-pdf/`
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `program_${this.conference.nazvanie}.pdf`
+        link.target = '_blank'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      } catch (error) {
+        console.error('Ошибка скачивания PDF:', error)
+        alert('Ошибка при скачивании программы: ' + error.message)
+      }
+    },
     
     getSectionReportsCount(sectionId) {
       return this.reports.filter(r => r.sektsiya == sectionId).length
@@ -1077,9 +1405,9 @@ export default {
     
     formatTime(datetime) {
       if (!datetime) return ''
-      return new Date(datetime).toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
+      return new Date(datetime).toLocaleTimeString('ru-RU', { 
+        hour: '2-digit', 
+        minute: '2-digit' 
       })
     },
     
@@ -1591,6 +1919,55 @@ export default {
 }
 
 .accommodations-list {
+  background: #fff;
+}
+
+/* Стили для распределения трансфера */
+.transfer-participant-card {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.transfer-participant-card:hover {
+  border-color: #198754;
+  box-shadow: 0 2px 8px rgba(25, 135, 84, 0.15);
+}
+
+.transfer-participant-card:active {
+  cursor: grabbing;
+}
+
+.transfer-participant-card.dragging {
+  opacity: 0.6;
+  transform: scale(0.98);
+}
+
+.transfer-card {
+  background: white;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.transfer-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.transfer-card.drag-over {
+  border-color: #198754 !important;
+  background: #d1e7dd !important;
+  transform: scale(1.02);
+}
+
+.transfer-participants-list {
+  background: #f8f9fa;
+}
+
+.transfers-list {
   background: #fff;
 }
 

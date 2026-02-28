@@ -3,7 +3,7 @@
     <div class="page-header">
       <h1 class="page-title">
         <i class="bi bi-kanban"></i>
-        Контейнеры программ
+        Программы конференций
       </h1>
       <button class="btn btn-primary" @click="openModal()">
         <i class="bi bi-plus-lg"></i>

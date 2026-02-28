@@ -65,7 +65,7 @@
         <li>
           <router-link to="/programs" class="nav-link">
             <i class="bi bi-kanban"></i>
-            <span>Контейнеры</span>
+            <span>Программа</span>
           </router-link>
         </li>
         <li>
