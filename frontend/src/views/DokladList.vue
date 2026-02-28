@@ -28,6 +28,13 @@
         <option value="отклонен">Отклонен</option>
         <option value="отложен">Отложен</option>
       </select>
+
+      <select v-model="konferentsiyaFilter" @change="fetchData" class="form-select">
+        <option value="">Все конференции</option>
+        <option v-for="konf in allKonferentsiyas" :key="konf.id" :value="konf.id">
+          {{ konf.nazvanie }}
+        </option>
+      </select>
     </div>
 
     <div class="table-container">
@@ -37,6 +44,7 @@
             <th>Название</th>
             <th>Автор</th>
             <th>Конференция</th>
+            <th>Секция</th>
             <th>Статус</th>
             <th>Дата подачи</th>
             <th class="text-end">Действия</th>
@@ -47,6 +55,12 @@
             <td>{{ item.nazvanie }}</td>
             <td>{{ item.uchastnik_fio }}</td>
             <td>{{ item.konferentsiya_nazvanie }}</td>
+            <td>
+              <span v-if="item.sektsiya_nazvanie" class="badge bg-info">
+                {{ item.sektsiya_nazvanie }}
+              </span>
+              <span v-else class="text-muted">—</span>
+            </td>
             <td>
               <span :class="['status-badge', 'status-' + item.status_doklada]">
                 {{ getStatusLabel(item.status_doklada) }}
@@ -63,7 +77,7 @@
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="6" class="text-center text-muted py-4">
+            <td colspan="7" class="text-center text-muted py-4">
               Нет данных
             </td>
           </tr>
@@ -93,16 +107,40 @@
                     </option>
                   </select>
                 </div>
+                
                 <div class="col-md-6 mb-3">
                   <label class="form-label">Конференция *</label>
-                  <select class="form-select" v-model="form.konferentsiya" required>
-                    <option v-for="konf in konferentsiyas" :key="konf.id" :value="konf.id">
+                  <select 
+                    class="form-select" 
+                    v-model="form.konferentsiya" 
+                    required
+                    @change="onConferenceChange"
+                  >
+                    <option value="" disabled>Выберите конференцию</option>
+                    <option v-for="konf in allKonferentsiyas" :key="konf.id" :value="konf.id">
                       {{ konf.nazvanie }}
                     </option>
                   </select>
                 </div>
               </div>
               <div class="row">
+             
+                <div class="col-md-6 mb-3">
+                  <label class="form-label">Секция</label>
+                  <select class="form-select" v-model="form.sektsiya">
+                    <option value="">Не выбрана</option>
+                    <option 
+                      v-for="sek in filteredSekciyas" 
+                      :key="sek.id" 
+                      :value="sek.id"
+                    >
+                      {{ sek.nazvanie }}
+                    </option>
+                  </select>
+                  <div class="form-text">
+                    Секции отображаются только для выбранной конференции
+                  </div>
+                </div>
                 <div class="col-md-6 mb-3">
                   <label class="form-label">Статус *</label>
                   <select class="form-select" v-model="form.status_doklada" required>
@@ -112,14 +150,41 @@
                     <option value="отложен">Отложен</option>
                   </select>
                 </div>
-                <div class="col-md-6 mb-3">
-                  <label class="form-label">Выступает</label>
-                  <select class="form-select" v-model="form.vystupaet">
-                    <option :value="true">Да</option>
-                    <option :value="false">Нет</option>
-                  </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Выступает</label>
+                <select class="form-select" v-model="form.vystupaet">
+                  <option :value="true">Да</option>
+                  <option :value="false">Нет</option>
+                </select>
+              </div>
+              
+              <!-- Загрузка файла -->
+              <div class="mb-3">
+                <label class="form-label">Файл доклада</label>
+                <div class="alert alert-info" v-if="isEdit && currentFileUrl">
+                  <i class="bi bi-info-circle"></i>
+                  Текущий файл: 
+                  <a :href="currentFileUrl" target="_blank" class="ms-1">
+                    <i class="bi bi-download"></i> Скачать текущий файл
+                  </a>
+                </div>
+                <input 
+                  type="file" 
+                  class="form-control" 
+                  @change="onFileSelect"
+                  accept=".pdf,.doc,.docx,.ppt,.pptx,.odt,.ods,.odp"
+                  ref="fileInput"
+                >
+                <div class="form-text">
+                  Допустимые форматы: PDF, DOC, DOCX, PPT, PPTX (макс. 10MB)
+                </div>
+                <div v-if="selectedFile" class="alert alert-success mt-2">
+                  <i class="bi bi-check-circle"></i>
+                  Выбран файл: {{ selectedFile.name }} ({{ formatFileSize(selectedFile.size) }})
                 </div>
               </div>
+              
               <div class="modal-footer px-0 pb-0">
                 <button type="button" class="btn btn-secondary" @click="closeModal()">Отмена</button>
                 <button type="submit" class="btn btn-primary">Сохранить</button>
@@ -133,7 +198,7 @@
 </template>
 
 <script>
-import { dokladAPI, uchastnikAPI, konferentsiyaAPI } from '../services/api'
+import { dokladAPI, uchastnikAPI, konferentsiyaAPI, sekciyaAPI } from '../services/api'
 import { Modal } from 'bootstrap'
 
 export default {
@@ -142,19 +207,33 @@ export default {
     return {
       items: [],
       uchastniks: [],
-      konferentsiyas: [],
+      allKonferentsiyas: [],  
+      allSekciyas: [],         
       searchQuery: '',
       statusFilter: '',
+      konferentsiyaFilter: '', 
       form: {
         id: null,
         nazvanie: '',
         uchastnik: null,
-        konferentsiya: null,
+        konferentsiya: null,   
+        sektsiya: null,        
         status_doklada: 'на рассмотрении',
         vystupaet: true
       },
+      selectedFile: null,
+      currentFileUrl: null,
       isEdit: false,
       modal: null
+    }
+  },
+  computed: {
+ 
+    filteredSekciyas() {
+      if (!this.form.konferentsiya) {
+        return []
+      }
+      return this.allSekciyas.filter(sek => sek.konferentsiya == this.form.konferentsiya)
     }
   },
   mounted() {
@@ -162,19 +241,27 @@ export default {
     this.fetchData()
     this.loadUchastniks()
     this.loadKonferentsiyas()
+    this.loadSekciyas()  
   },
   methods: {
     async fetchData() {
       try {
         const response = await dokladAPI.getAll()
         let data = response.data.results || response.data
+        
+        // Фильтрация по поиску
         if (this.searchQuery) {
           data = data.filter(item => 
             item.nazvanie.toLowerCase().includes(this.searchQuery.toLowerCase())
           )
         }
+        // Фильтрация по статусу
         if (this.statusFilter) {
           data = data.filter(item => item.status_doklada === this.statusFilter)
+        }
+     
+        if (this.konferentsiyaFilter) {
+          data = data.filter(item => item.konferentsiya == this.konferentsiyaFilter)
         }
         this.items = data
       } catch (error) {
@@ -193,14 +280,34 @@ export default {
     async loadKonferentsiyas() {
       try {
         const response = await konferentsiyaAPI.getAll()
-        this.konferentsiyas = response.data.results || response.data
+        this.allKonferentsiyas = response.data.results || response.data
       } catch (error) {
         console.error('Ошибка загрузки конференций:', error)
       }
     },
+    async loadSekciyas() {
+      try {
+        const response = await sekciyaAPI.getAll()
+        this.allSekciyas = response.data.results || response.data
+      } catch (error) {
+        console.error('Ошибка загрузки секций:', error)
+      }
+    },
+   
+    onConferenceChange() {
+   
+      this.form.sektsiya = null
+    },
     formatDate(date) {
       if (!date) return ''
       return new Date(date).toLocaleDateString('ru-RU')
+    },
+    formatFileSize(bytes) {
+      if (!bytes) return '0 Bytes'
+      const k = 1024
+      const sizes = ['Bytes', 'KB', 'MB', 'GB']
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
     },
     getStatusLabel(status) {
       const labels = {
@@ -211,16 +318,57 @@ export default {
       }
       return labels[status] || status
     },
+    onFileSelect(event) {
+      const file = event.target.files[0]
+      if (file) {
+        if (file.size > 10 * 1024 * 1024) {
+          alert('Файл слишком большой. Максимальный размер: 10MB')
+          this.selectedFile = null
+          if (this.$refs.fileInput) {
+            this.$refs.fileInput.value = ''
+          }
+          return
+        }
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'odt', 'ods', 'odp']
+        const fileExtension = file.name.split('.').pop().toLowerCase()
+        if (!allowedExtensions.includes(fileExtension)) {
+          alert('Недопустимый формат файла')
+          this.selectedFile = null
+          if (this.$refs.fileInput) {
+            this.$refs.fileInput.value = ''
+          }
+          return
+        }
+        this.selectedFile = file
+      }
+    },
     openModal(item = null) {
       this.isEdit = !!item
+      this.selectedFile = null
+      this.currentFileUrl = null
+      if (this.$refs.fileInput) {
+        this.$refs.fileInput.value = ''
+      }
       if (item) {
-        this.form = { ...item }
+       
+        this.form = { 
+          id: item.id,
+          nazvanie: item.nazvanie,
+          uchastnik: item.uchastnik,
+          konferentsiya: item.konferentsiya,
+          sektsiya: item.sektsiya || null,
+          status_doklada: item.status_doklada,
+          vystupaet: item.vystupaet
+        }
+        this.currentFileUrl = item.file_url
       } else {
+       
         this.form = {
           id: null,
           nazvanie: '',
           uchastnik: null,
-          konferentsiya: null,
+          konferentsiya: null,  
+          sektsiya: null,
           status_doklada: 'на рассмотрении',
           vystupaet: true
         }
@@ -236,16 +384,16 @@ export default {
     async saveItem() {
       try {
         if (this.isEdit) {
-          await dokladAPI.update(this.form.id, this.form)
+          await dokladAPI.update(this.form.id, this.form, this.selectedFile)
         } else {
-          await dokladAPI.create(this.form)
+          await dokladAPI.create(this.form, this.selectedFile)
         }
         this.closeModal()
         this.fetchData()
         alert('Сохранено успешно')
       } catch (error) {
         console.error('Ошибка сохранения:', error)
-        alert('Ошибка при сохранении')
+        alert('Ошибка при сохранении: ' + (error.response?.data?.error || error.message))
       }
     },
     async deleteItem(id) {
@@ -360,5 +508,20 @@ export default {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.file-link {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.file-link:hover {
+  text-decoration: underline;
+}
+
+.badge.bg-info {
+  background-color: #0dcaf0 !important;
+  color: #000;
 }
 </style>

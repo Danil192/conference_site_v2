@@ -5,7 +5,11 @@ from django.db import transaction
 from rest_framework import viewsets, filters, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
+from django.utils import timezone
+from datetime import datetime
+from .permissions import AllowAnyIfDebug, IsAdminOrOrganizer, IsAuthenticatedReadOnly
 
 from .models import (
     Konferentsiya, Uchastnik, Prozhivanie, Transfer, Doklad,
@@ -16,15 +20,58 @@ from .models import (
 from .serializers import (
     KonferentsiyaSerializer, UchastnikSerializer, ProzhivanieSerializer,
     TransferSerializer, DokladSerializer, OtkazSerializer,
-    UchastnikTransferSerializer, ProzhivanieTransferSerializer, 
+    UchastnikTransferSerializer, ProzhivanieTransferSerializer,
     ProgrammaSerializer, ProgramSerializer, SekciyaSerializer,
     UchastnikProzhivanieSerializer, TarifSerializer, PlatezhSerializer, SchetSerializer,
     EmailShablonSerializer, UvedomlenieLogSerializer, ProfilPolzovatelyaSerializer
 )
 
 
+# ========== КЛАССЫ ПРАВ ДОСТУПА ==========
+
+class IsAuthenticatedReadOnly(permissions.BasePermission):
+    """
+    Все аутентифицированные могут читать, писать только админы/организаторы
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        # Чтение доступно всем авторизованным
+        if request.method in permissions.SAFE_METHODS:
+            return True
+        
+        # Запись только для суперпользователей
+        if request.user.is_superuser:
+            return True
+        
+        # Проверка роли через профиль
+        if hasattr(request.user, 'profilpolzovatelya'):
+            return request.user.profilpolzovatelya.rol in ['admin', 'organizer']
+        
+        return False
+
+
+class IsAdminOrOrganizer(permissions.BasePermission):
+    """Только администраторы и организаторы"""
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        
+        if request.user.is_superuser:
+            return True
+        
+        if hasattr(request.user, 'profilpolzovatelya'):
+            return request.user.profilpolzovatelya.rol in ['admin', 'organizer']
+        
+        return False
+
+
+# ========== ИМПОРТ ==========
+
 class ImportViewSet(viewsets.ViewSet):
     """API для импорта данных из Excel (формат ИСЭМ СО РАН)"""
+    permission_classes = [permissions.IsAuthenticated]
     
     @action(detail=False, methods=['post'])  
     def participants(self, request):          
@@ -103,14 +150,11 @@ class ImportViewSet(viewsets.ViewSet):
                             ).first()
                             
                             if not konferentsiya:
-                                from django.utils import timezone
-                                
                                 conf_start_date = data_podachi
                                 if hasattr(conf_start_date, 'date'):
                                     conf_start_date = conf_start_date.date()
                                 elif isinstance(data_podachi, str) and data_podachi:
                                     try:
-                                        from datetime import datetime
                                         conf_start_date = datetime.strptime(data_podachi, '%Y-%m-%d').date()
                                     except:
                                         conf_start_date = timezone.now().date()
@@ -176,17 +220,23 @@ class ImportViewSet(viewsets.ViewSet):
             )
 
 
+# ========== КОНФЕРЕНЦИИ ==========
+
 class KonferentsiyaViewSet(viewsets.ModelViewSet):
     queryset = Konferentsiya.objects.all()
     serializer_class = KonferentsiyaSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['status']
     search_fields = ['nazvanie']
 
 
+# ========== СЕКЦИИ ==========
+
 class SekciyaViewSet(viewsets.ModelViewSet):
     queryset = Sekciya.objects.all()
     serializer_class = SekciyaSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['konferentsiya']
     search_fields = ['nazvanie']
@@ -200,64 +250,97 @@ class SekciyaViewSet(viewsets.ModelViewSet):
         return queryset
 
 
+# ========== ПРОЖИВАНИЕ ==========
+
 class ProzhivanieViewSet(viewsets.ModelViewSet):
     queryset = Prozhivanie.objects.all()
     serializer_class = ProzhivanieSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['kategoriya_nomerov']
     search_fields = ['nazvanie', 'turbaza_nazvanie']
 
 
+# ========== ТРАНСФЕР ==========
+
 class TransferViewSet(viewsets.ModelViewSet):
     queryset = Transfer.objects.all()
     serializer_class = TransferSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['tip_transfera']
     search_fields = ['mesto_vstrechi']
 
 
+# ========== УЧАСТНИКИ ==========
+
 class UchastnikViewSet(viewsets.ModelViewSet):
     queryset = Uchastnik.objects.all()
     serializer_class = UchastnikSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['status_uchastnika', 'konferentsiya', 'sektsiya']
     search_fields = ['familiya', 'name', 'email', 'organizatsiya']
 
 
+# ========== СВЯЗЬ УЧАСТНИК-ПРОЖИВАНИЕ ==========
+
 class UchastnikProzhivanieViewSet(viewsets.ModelViewSet):
     queryset = UchastnikProzhivanie.objects.all()
     serializer_class = UchastnikProzhivanieSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['uchastnik', 'prozhivanie']
 
 
+# ========== ПРОГРАММЫ ==========
+
 class ProgramViewSet(viewsets.ModelViewSet):
     queryset = Program.objects.all()
     serializer_class = ProgramSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
     filterset_fields = ['konferentsiya']
     search_fields = ['nazvanie']
 
 
+class ProgrammaViewSet(viewsets.ModelViewSet):
+    queryset = Programma.objects.all()
+    serializer_class = ProgrammaSerializer
+    permission_classes = [AllowAnyIfDebug]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['program', 'sekciya']
+    ordering_fields = ['vremya_nachala', 'nomer_v_programme']
+    ordering = ['vremya_nachala']
+
+
+# ========== ДОКЛАДЫ ==========
+
 class DokladViewSet(viewsets.ModelViewSet):
     queryset = Doklad.objects.all()
     serializer_class = DokladSerializer
     filter_backends = [DjangoFilterBackend, filters.SearchFilter]
-    filterset_fields = ['status_doklada', 'konferentsiya', 'uchastnik']
+    filterset_fields = ['status_doklada', 'konferentsiya', 'uchastnik', 'sektsiya']
     search_fields = ['nazvanie']
 
+
+# ========== ОТКАЗЫ ==========
 
 class OtkazViewSet(viewsets.ModelViewSet):
     queryset = Otkaz.objects.all()
     serializer_class = OtkazSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['status_otkaza', 'konferentsiya']
     search_fields = ['uchastnik__familiya', 'prichina']
 
 
+# ========== СВЯЗИ ==========
+
 class UchastnikTransferViewSet(viewsets.ModelViewSet):
     queryset = UchastnikTransfer.objects.all()
     serializer_class = UchastnikTransferSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['uchastnik', 'transfer']
 
@@ -265,22 +348,17 @@ class UchastnikTransferViewSet(viewsets.ModelViewSet):
 class ProzhivanieTransferViewSet(viewsets.ModelViewSet):
     queryset = ProzhivanieTransfer.objects.all()
     serializer_class = ProzhivanieTransferSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['prozhivanie', 'transfer']
 
 
-class ProgrammaViewSet(viewsets.ModelViewSet):
-    queryset = Programma.objects.all()
-    serializer_class = ProgrammaSerializer
-    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['program', 'sekciya']
-    ordering_fields = ['vremya_nachala', 'nomer_v_programme']
-    ordering = ['vremya_nachala']
-
+# ========== ФИНАНСОВЫЙ МОДУЛЬ ==========
 
 class TarifViewSet(viewsets.ModelViewSet):
     queryset = Tarif.objects.all()
     serializer_class = TarifSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['konferentsiya']
 
@@ -288,6 +366,7 @@ class TarifViewSet(viewsets.ModelViewSet):
 class PlatezhViewSet(viewsets.ModelViewSet):
     queryset = Platezh.objects.all()
     serializer_class = PlatezhSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['uchastnik', 'status']
 
@@ -295,13 +374,17 @@ class PlatezhViewSet(viewsets.ModelViewSet):
 class SchetViewSet(viewsets.ModelViewSet):
     queryset = Schet.objects.all()
     serializer_class = SchetSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['uchastnik', 'status']
 
 
+# ========== УВЕДОМЛЕНИЯ ==========
+
 class EmailShablonViewSet(viewsets.ModelViewSet):
     queryset = EmailShablon.objects.all()
     serializer_class = EmailShablonSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['tip']
 
@@ -309,12 +392,430 @@ class EmailShablonViewSet(viewsets.ModelViewSet):
 class UvedomlenieLogViewSet(viewsets.ModelViewSet):
     queryset = UvedomlenieLog.objects.all()
     serializer_class = UvedomlenieLogSerializer
+    permission_classes = [AllowAnyIfDebug]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['uchastnik', 'status']
 
 
+# ========== РОЛИ ==========
+
 class ProfilPolzovatelyaViewSet(viewsets.ModelViewSet):
     queryset = ProfilPolzovatelya.objects.all()
     serializer_class = ProfilPolzovatelyaSerializer
+    # permission_classes = [IsAdminOrOrganizer]
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['rol']
+
+
+# ========== СТАТИСТИКА И ЛОГИСТИКА ==========
+
+class ProzhivanieStatistikaView(APIView):
+    """Статистика по проживанию для конференции"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, konferentsiya_id):
+        try:
+            konferentsiya = Konferentsiya.objects.get(id=konferentsiya_id)
+            
+            # Все варианты проживания
+            prozhivaniya = Prozhivanie.objects.all()
+            
+            # Участники, нуждающиеся в проживании (если поле существует)
+            try:
+                uchastniki_nuzhdayushchiesya = Uchastnik.objects.filter(
+                    konferentsiya=konferentsiya,
+                    nuzhen_prozhivanie=True
+                )
+            except:
+                uchastniki_nuzhdayushchiesya = Uchastnik.objects.filter(konferentsiya=konferentsiya)
+            
+            # Заселённые участники
+            zaseleniye = UchastnikProzhivanie.objects.filter(
+                uchastnik__konferentsiya=konferentsiya
+            )
+            
+            stats = {
+                'konferentsiya_id': konferentsiya_id,
+                'konferentsiya_nazvanie': konferentsiya.nazvanie,
+                
+                # Общая статистика
+                'total_places': sum(p.vmestimost for p in prozhivaniya),
+                'occupied_places': sum(p.mesta_zanyaty for p in prozhivaniya),
+                'free_places': sum(p.mesta_svobodnye for p in prozhivaniya),
+                
+                # Участники
+                'participants_need_accommodation': uchastniki_nuzhdayushchiesya.count(),
+                'participants_settled': zaseleniye.count(),
+                'participants_waiting': uchastniki_nuzhdayushchiesya.count() - zaseleniye.count(),
+                
+                # Варианты проживания
+                'accommodation_options': []
+            }
+            
+            # Процент заполненности
+            if stats['total_places'] > 0:
+                stats['occupancy_percent'] = round(
+                    (stats['occupied_places'] / stats['total_places']) * 100, 1
+                )
+            else:
+                stats['occupancy_percent'] = 0
+            
+            # Детализация по вариантам проживания
+            for proj in prozhivaniya:
+                stats['accommodation_options'].append({
+                    'id': proj.id,
+                    'nazvanie': proj.nazvanie,
+                    'tip': proj.kategoriya_nomerov,
+                    'vmestimost': proj.vmestimost,
+                    'mesta_zanyaty': proj.mesta_zanyaty,
+                    'mesta_svobodnye': proj.mesta_svobodnye,
+                    'stoimost': str(proj.stoimost),
+                    'occupancy_percent': round(
+                        (proj.mesta_zanyaty / proj.vmestimost * 100) if proj.vmestimost > 0 else 0, 1
+                    )
+                })
+            
+            return Response(stats)
+            
+        except Konferentsiya.DoesNotExist:
+            return Response(
+                {'error': 'Конференция не найдена'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class TransferStatistikaView(APIView):
+    """Статистика по трансферу для конференции"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get(self, request, konferentsiya_id):
+        try:
+            konferentsiya = Konferentsiya.objects.get(id=konferentsiya_id)
+            
+            transfers = Transfer.objects.all()
+            
+            stats = {
+                'konferentsiya_id': konferentsiya_id,
+                'total_capacity': sum(t.vmestimost for t in transfers),
+                'occupied_seats': sum(t.mesta_zanyaty for t in transfers),
+                'free_seats': sum(t.mesta_svobodnye for t in transfers),
+                'transfers': []
+            }
+            
+            if stats['total_capacity'] > 0:
+                stats['occupancy_percent'] = round(
+                    (stats['occupied_seats'] / stats['total_capacity']) * 100, 1
+                )
+            else:
+                stats['occupancy_percent'] = 0
+            
+            for transfer in transfers:
+                stats['transfers'].append({
+                    'id': transfer.id,
+                    'tip': transfer.tip_transfera,
+                    'mesto_vstrechi': transfer.mesto_vstrechi,
+                    'vmestimost': transfer.vmestimost,
+                    'mesta_zanyaty': transfer.mesta_zanyaty,
+                    'mesta_svobodnye': transfer.mesta_svobodnye,
+                    'occupancy_percent': round(
+                        (transfer.mesta_zanyaty / transfer.vmestimost * 100) if transfer.vmestimost > 0 else 0, 1
+                    )
+                })
+            
+            return Response(stats)
+            
+        except Konferentsiya.DoesNotExist:
+            return Response(
+                {'error': 'Конференция не найдена'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class ZaselenieViewSet(viewsets.ViewSet):
+    """Управление заселением участников"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['post'])
+    def zaselit(self, request):
+        """Заселить участника в проживание"""
+        uchastnik_id = request.data.get('uchastnik_id')
+        prozhivanie_id = request.data.get('prozhivanie_id')
+        data_zaseleniya = request.data.get('data_zaseleniya')
+        data_vyseleniya = request.data.get('data_vyseleniya')
+        nomer_komnaty = request.data.get('nomer_komnaty', '')
+        
+        try:
+            uchastnik = Uchastnik.objects.get(id=uchastnik_id)
+            prozhivanie = Prozhivanie.objects.get(id=prozhivanie_id)
+            
+            # Проверка свободных мест
+            if prozhivanie.mesta_svobodnye <= 0:
+                return Response(
+                    {'error': 'Нет свободных мест в этом варианте проживания'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Проверка, не заселен ли уже участник
+            if UchastnikProzhivanie.objects.filter(uchastnik=uchastnik).exists():
+                return Response(
+                    {'error': 'Участник уже заселен'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Создаём связь
+            UchastnikProzhivanie.objects.create(
+                uchastnik=uchastnik,
+                prozhivanie=prozhivanie,
+                data_zaseleniya=data_zaseleniya or getattr(uchastnik, 'data_zaseleniya', None),
+                data_vyseleniya=data_vyseleniya or getattr(uchastnik, 'data_vyseleniya', None),
+                nomer_komnaty=nomer_komnaty
+            )
+            
+            # Обновляем флаг участника (если поле существует)
+            if hasattr(uchastnik, 'nuzhen_prozhivanie'):
+                uchastnik.nuzhen_prozhivanie = True
+                uchastnik.save()
+            
+            return Response({
+                'success': True,
+                'message': f'Участник {uchastnik.familiya} заселён в {prozhivanie.nazvanie}'
+            })
+            
+        except Uchastnik.DoesNotExist:
+            return Response(
+                {'error': 'Участник не найден'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Prozhivanie.DoesNotExist:
+            return Response(
+                {'error': 'Вариант проживания не найден'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['post'])
+    def vyselit(self, request):
+        """Выселить участника"""
+        uchastnik_id = request.data.get('uchastnik_id')
+        
+        try:
+            uchastnik = Uchastnik.objects.get(id=uchastnik_id)
+            svyaz = UchastnikProzhivanie.objects.filter(uchastnik=uchastnik).first()
+            
+            if not svyaz:
+                return Response(
+                    {'error': 'Участник не заселен'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Связь удалится, освободив место (через model save/delete)
+            svyaz.delete()
+            
+            # Обновляем флаг участника (если поле существует)
+            if hasattr(uchastnik, 'nuzhen_prozhivanie'):
+                uchastnik.nuzhen_prozhivanie = False
+                uchastnik.save()
+            
+            return Response({
+                'success': True,
+                'message': f'Участник {uchastnik.familiya} выселен'
+            })
+            
+        except Uchastnik.DoesNotExist:
+            return Response(
+                {'error': 'Участник не найден'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    
+    @action(detail=False, methods=['get'])
+    def nezaseslennye(self, request):
+        """Список участников, нуждающихся в проживании, но не заселенных"""
+        konferentsiya_id = request.query_params.get('konferentsiya')
+        
+        try:
+            queryset = Uchastnik.objects.filter(
+                konferentsiya_id=konferentsiya_id
+            ).exclude(
+                uchastnikprozhivanie__isnull=False
+            )
+            
+            serializer = UchastnikSerializer(queryset, many=True)
+            return Response(serializer.data)
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+# core/views.py
+
+class SettlementViewSet(viewsets.ViewSet):
+    """Управление расселением участников"""
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=False, methods=['get'])
+    def available(self, request):
+        """Получить участников без проживания для конференции"""
+        konferentsiya_id = request.query_params.get('konferentsiya')
+        
+        if not konferentsiya_id:
+            return Response(
+                {'error': 'Требуется параметр konferentsiya'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Участники, нуждающиеся в проживании, но не заселенные
+        participants = Uchastnik.objects.filter(
+            konferentsiya_id=konferentsiya_id,
+            nuzhen_prozhivanie=True
+        ).exclude(
+            uchastnikprozhivanie__isnull=False
+        ).select_related('sektsiya')
+        
+        serializer = UchastnikSerializer(participants, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def accommodations(self, request):
+        """Получить варианты проживания для конференции с группировкой"""
+        konferentsiya_id = request.query_params.get('konferentsiya')
+        
+        if not konferentsiya_id:
+            return Response(
+                {'error': 'Требуется параметр konferentsiya'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        prozhivaniya = Prozhivanie.objects.filter(
+            konferentsiya_id=konferentsiya_id
+        ).order_by('turbaza_nazvanie', 'kategoriya_nomerov')
+        
+        # Группировка по турбазам
+        result = {}
+        for proj in prozhivaniya:
+            turbaza = proj.turbaza_nazvanie or 'Без турбазы'
+            if turbaza not in result:
+                result[turbaza] = {
+                    'name': turbaza,
+                    'categories': {}
+                }
+            
+            category = proj.kategoriya_nomerov or 'Стандарт'
+            if category not in result[turbaza]['categories']:
+                result[turbaza]['categories'][category] = []
+            
+            result[turbaza]['categories'][category].append({
+                'id': proj.id,
+                'nazvanie': proj.nazvanie,
+                'vmestimost': proj.vmestimost,
+                'mesta_zanyaty': proj.mesta_zanyaty,
+                'mesta_svobodnye': proj.get_free_places(),
+                'stoimost': str(proj.stoimost),
+                'can_accommodate': proj.can_accommodate(),
+                'kolvo_domikov': proj.kolvo_domikov
+            })
+        
+        return Response(result)
+    
+    @action(detail=False, methods=['post'])
+    def settle(self, request):
+        """Заселить участника в проживание"""
+        uchastnik_id = request.data.get('uchastnik_id')
+        prozhivanie_id = request.data.get('prozhivanie_id')
+        data_zaseleniya = request.data.get('data_zaseleniya')
+        data_vyseleniya = request.data.get('data_vyseleniya')
+        nomer_komnaty = request.data.get('nomer_komnaty', '')
+        
+        try:
+            uchastnik = Uchastnik.objects.get(id=uchastnik_id)
+            prozhivanie = Prozhivanie.objects.get(id=prozhivanie_id)
+            
+            # Проверка: уже заселен?
+            if UchastnikProzhivanie.objects.filter(uchastnik=uchastnik).exists():
+                return Response(
+                    {'error': 'Участник уже заселен'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Проверка: есть ли свободные места?
+            if not prozhivanie.can_accommodate():
+                return Response(
+                    {'error': f'Нет свободных мест в "{prozhivanie.nazvanie}"'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Создаём связь
+            UchastnikProzhivanie.objects.create(
+                uchastnik=uchastnik,
+                prozhivanie=prozhivanie,
+                data_zaseleniya=data_zaseleniya or uchastnik.data_zaseleniya,
+                data_vyseleniya=data_vyseleniya or uchastnik.data_vyseleniya,
+                nomer_komnaty=nomer_komnaty
+            )
+            
+            # Проживание обновит счётчики автоматически через save()
+            
+            return Response({
+                'success': True,
+                'message': f'{uchastnik.familiya} {uchastnik.name} заселён в {prozhivanie.nazvanie}',
+                'prozhivanie': {
+                    'id': prozhivanie.id,
+                    'mesta_zanyaty': prozhivanie.mesta_zanyaty,
+                    'mesta_svobodnye': prozhivanie.get_free_places()
+                }
+            })
+            
+        except Uchastnik.DoesNotExist:
+            return Response({'error': 'Участник не найден'}, status=404)
+        except Prozhivanie.DoesNotExist:
+            return Response({'error': 'Проживание не найдено'}, status=404)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+    
+    @action(detail=False, methods=['post'])
+    def vacate(self, request):
+        """Выселить участника"""
+        uchastnik_id = request.data.get('uchastnik_id')
+        
+        try:
+            uchastnik = Uchastnik.objects.get(id=uchastnik_id)
+            svyaz = UchastnikProzhivanie.objects.filter(uchastnik=uchastnik).first()
+            
+            if not svyaz:
+                return Response(
+                    {'error': 'Участник не заселен'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Удаление связи автоматически обновит счётчики через delete()
+            svyaz.delete()
+            
+            return Response({
+                'success': True,
+                'message': f'{uchastnik.familiya} {uchastnik.name} выселен'
+            })
+            
+        except Uchastnik.DoesNotExist:
+            return Response({'error': 'Участник не найден'}, status=404)
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)

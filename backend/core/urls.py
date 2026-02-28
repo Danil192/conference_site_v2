@@ -1,6 +1,7 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .views import ProzhivanieStatistikaView, SettlementViewSet, TransferStatistikaView
 
 router = DefaultRouter()
 
@@ -30,9 +31,19 @@ router.register(r'uvedomlenie-log', views.UvedomlenieLogViewSet, basename='uvedo
 # Роли
 router.register(r'profili', views.ProfilPolzovatelyaViewSet, basename='profil')
 
-# router.register(r'import', views.ImportViewSet, basename='import')
+# Импорт
+router.register(r'import', views.ImportViewSet, basename='import')
 
 urlpatterns = [
     path('', include(router.urls)),
     path('import/participants/', views.ImportViewSet.as_view({'post': 'participants'}), name='import-participants'),
+    
+    path('konferentsiyas/<int:konferentsiya_id>/prozhivanie-stats/', 
+         ProzhivanieStatistikaView.as_view(), 
+         name='prozhivanie-stats'),
+    path('konferentsiyas/<int:konferentsiya_id>/transfer-stats/', 
+         TransferStatistikaView.as_view(), 
+         name='transfer-stats'),
 ]
+
+router.register(r'settlement', SettlementViewSet, basename='settlement')

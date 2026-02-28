@@ -142,12 +142,16 @@
               </div>
               <div class="row">
                 <div class="col-md-4 mb-3">
-                  <label class="form-label">Конференция *</label>
-                  <select class="form-select" v-model="form.konferentsiya" required>
+                  <label class="form-label">Конференция</label>
+                  <select class="form-select" v-model="form.konferentsiya">
+                    <option value="">Не выбрана (резерв)</option>
                     <option v-for="konf in konferentsiyas" :key="konf.id" :value="konf.id">
                       {{ konf.nazvanie }}
                     </option>
                   </select>
+                  <div class="form-text">
+                    Можно добавить участника без конференции и добавить потом
+                  </div>
                 </div>
                 <div class="col-md-4 mb-3">
                   <label class="form-label">Секция</label>
@@ -382,19 +386,27 @@ export default {
       this.openModal(item)
     },
     async saveItem() {
-      try {
-        if (this.isEdit) {
-          await uchastnikAPI.update(this.form.id, this.form)
-        } else {
-          await uchastnikAPI.create(this.form)
+      const requiredFields = ['familiya', 'name', 'email']
+        for (const field of requiredFields) {
+          if (!this.form[field]) {
+            alert(`Поле "${field}" обязательно для заполнения`)
+            return
+          }
         }
-        this.closeModal()
-        this.fetchData()
-        alert('Сохранено успешно')
-      } catch (error) {
-        console.error('Ошибка сохранения:', error)
-        alert('Ошибка при сохранении')
-      }
+        
+        try {
+          if (this.isEdit) {
+            await uchastnikAPI.update(this.form.id, this.form)
+          } else {
+            await uchastnikAPI.create(this.form)
+          }
+          this.closeModal()
+          this.fetchData()
+          alert('Сохранено успешно')
+        } catch (error) {
+          console.error('Ошибка сохранения:', error)
+          alert('Ошибка при сохранении: ' + (error.response?.data?.error || error.message))
+        }
     },
     async deleteItem(id) {
       if (!confirm('Удалить участника?')) return

@@ -77,9 +77,7 @@
       </ul>
       
       <div class="sidebar-footer">
-        <a href="http://localhost:8000/admin/" target="_blank" class="admin-link">
-          <i class="bi bi-gear"></i> Django Админка
-        </a>
+       
       </div>
     </nav>
 

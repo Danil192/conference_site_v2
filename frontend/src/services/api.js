@@ -20,7 +20,10 @@ export const konferentsiyaAPI = {
 
 // Участники
 export const uchastnikAPI = {
-  getAll: () => api.get('/uchastniks/'),
+  getAll: (params = {}) => {
+    const queryString = new URLSearchParams(params).toString()
+    return api.get(`/uchastniks/${queryString ? '?' + queryString : ''}`)
+  },
   getById: (id) => api.get(`/uchastniks/${id}/`),
   create: (data) => api.post('/uchastniks/', data),
   update: (id, data) => api.put(`/uchastniks/${id}/`, data),
@@ -36,7 +39,6 @@ export const prozhivanieAPI = {
   delete: (id) => api.delete(`/prozhivanies/${id}/`),
 }
 
-// Секции
 // Секции
 export const sekciyaAPI = {
   getAll: (konferentsiyaId = null) => {
@@ -62,8 +64,37 @@ export const transferAPI = {
 export const dokladAPI = {
   getAll: () => api.get('/doklads/'),
   getById: (id) => api.get(`/doklads/${id}/`),
-  create: (data) => api.post('/doklads/', data),
-  update: (id, data) => api.put(`/doklads/${id}/`, data),
+  // Для создания/обновления с файлом используем FormData
+  create: (data, file = null) => {
+    if (file) {
+      const formData = new FormData()
+      Object.keys(data).forEach(key => {
+        formData.append(key, data[key])
+      })
+      formData.append('file', file)
+      return api.post('/doklads/', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+    }
+    return api.post('/doklads/', data)
+  },
+  update: (id, data, file = null) => {
+    if (file) {
+      const formData = new FormData()
+      Object.keys(data).forEach(key => {
+        formData.append(key, data[key])
+      })
+      formData.append('file', file)
+      return api.put(`/doklads/${id}/`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+    }
+    return api.put(`/doklads/${id}/`, data)
+  },
   delete: (id) => api.delete(`/doklads/${id}/`),
 }
 
@@ -105,6 +136,16 @@ export const importAPI = {
       },
     })
   },
+}
+
+// Расселение
+export const settlementAPI = {
+  getAvailable: (konferentsiyaId) => 
+    api.get(`/settlement/available/?konferentsiya=${konferentsiyaId}`),
+  getAccommodations: (konferentsiyaId) => 
+    api.get(`/settlement/accommodations/?konferentsiya=${konferentsiyaId}`),
+  settle: (data) => api.post('/settlement/settle/', data),
+  vacate: (data) => api.post('/settlement/vacate/', data),
 }
 
 export default api

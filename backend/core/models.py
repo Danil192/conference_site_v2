@@ -1,7 +1,7 @@
-from django.db import models
+from django.db import models, transaction
 from django.contrib.auth.models import User
 from django.utils import timezone
-
+from django.core.exceptions import ValidationError
 
 class Konferentsiya(models.Model):
     nazvanie = models.CharField(max_length=255)
@@ -16,18 +16,35 @@ class Konferentsiya(models.Model):
             ('отменена', 'Отменена'),
         ]
     )
+    
+    # === Логистика ===
+    trebuetsya_prozhivanie = models.BooleanField(
+        default=False, 
+        verbose_name="Требуется проживание",
+        help_text="Если отмечено, для конференции организуется проживание"
+    )
+    mesto_provedeniya = models.CharField(
+        max_length=50,
+        choices=[
+            ('gorod', 'Город (гостиница)'),
+            ('turbase', 'Турбаза'),
+            ('smeshanno', 'Смешанно'),
+        ],
+        default='gorod',
+        verbose_name="Место проведения"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'konferentsiya'
         ordering = ['-data_nachala']
-    
+
     def __str__(self):
         return self.nazvanie
-    
+
     def clean(self):
-        from django.core.exceptions import ValidationError
         if self.data_nachala > self.data_okonchaniya:
             raise ValidationError("Дата начала должна быть раньше даты окончания")
 
@@ -35,18 +52,18 @@ class Konferentsiya(models.Model):
 class Sekciya(models.Model):
     nazvanie = models.CharField(max_length=255)
     konferentsiya = models.ForeignKey(
-        Konferentsiya, 
-        on_delete=models.CASCADE, 
+        Konferentsiya,
+        on_delete=models.CASCADE,
         related_name='sekciyas'
     )
     opisanie = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'sekciya'
         ordering = ['nazvanie']
-        unique_together = ('nazvanie', 'konferentsiya') 
-    
+        unique_together = ('nazvanie', 'konferentsiya')
+
     def __str__(self):
         return f"{self.nazvanie}"
 
@@ -60,14 +77,54 @@ class Prozhivanie(models.Model):
     mesta_svobodnye = models.PositiveIntegerField(default=0)
     turbaza_nazvanie = models.CharField(max_length=255, blank=True)
     kolvo_domikov = models.PositiveIntegerField(default=0)
+    
+    # === Связь с конференцией ===
+    konferentsiya = models.ForeignKey(
+        Konferentsiya,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='prozhivaniya',
+        verbose_name="Конференция"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'prozhivanie'
-    
+
     def __str__(self):
         return self.nazvanie
+
+    def save(self, *args, **kwargs):
+        self.mesta_zanyaty = max(0, self.mesta_zanyaty)
+        if self.mesta_zanyaty > self.vmestimost:
+            self.mesta_zanyaty = self.vmestimost
+        
+        self.mesta_svobodnye = max(0, self.vmestimost - self.mesta_zanyaty)
+        super().save(*args, **kwargs)
+    
+    @property
+    def procent_zanyatosti(self):
+        """Процент заполненности"""
+        if self.vmestimost == 0:
+            return 0
+        return round((self.mesta_zanyaty / self.vmestimost) * 100, 1)
+    
+    def can_accommodate(self, count=1):
+        """Проверяет, можно ли заселить указанное количество участников"""
+        return (self.vmestimost - self.mesta_zanyaty) >= count
+    
+    def get_free_places(self):
+        """Возвращает количество свободных мест"""
+        return max(0, self.vmestimost - self.mesta_zanyaty)
+    
+    def save(self, *args, **kwargs):
+        # Авто-пересчёт свободных мест при сохранении
+        self.mesta_zanyaty = min(self.mesta_zanyaty, self.vmestimost)
+        self.mesta_svobodnye = max(0, self.vmestimost - self.mesta_zanyaty)
+        super().save(*args, **kwargs)
 
 
 class Transfer(models.Model):
@@ -84,14 +141,43 @@ class Transfer(models.Model):
     )
     mesta_zanyaty = models.PositiveIntegerField(default=0)
     mesta_svobodnye = models.PositiveIntegerField(default=0)
+    
+    # === Связь с конференцией ===
+    konferentsiya = models.ForeignKey(
+        Konferentsiya,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='transfers',
+        verbose_name="Конференция"
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'transfer'
-    
+
     def __str__(self):
         return f"{self.tip_transfera} — {self.mesto_vstrechi}"
+
+    def save(self, *args, **kwargs):
+        # ✅ Защита от отрицательных значений и переполнения
+        self.mesta_zanyaty = max(0, self.mesta_zanyaty)
+        if self.mesta_zanyaty > self.vmestimost:
+            self.mesta_zanyaty = self.vmestimost
+        
+        # ✅ Автоматический пересчёт свободных мест
+        self.mesta_svobodnye = max(0, self.vmestimost - self.mesta_zanyaty)
+        super().save(*args, **kwargs)
+    
+    @property
+    def procent_zanyatosti(self):
+        """Процент заполненности"""
+        if self.vmestimost == 0:
+            return 0
+        return round((self.mesta_zanyaty / self.vmestimost) * 100, 1)
+
 
 
 class Uchastnik(models.Model):
@@ -118,23 +204,53 @@ class Uchastnik(models.Model):
     )
     kommentarii = models.TextField(blank=True)
     konferentsiya = models.ForeignKey(Konferentsiya, on_delete=models.CASCADE)
-    nuzhen_transfer = models.BooleanField(default=False) 
+    nuzhen_transfer = models.BooleanField(default=False)
     
     # Финансовый модуль
     tarif = models.ForeignKey('Tarif', on_delete=models.SET_NULL, null=True, blank=True)
     oplata_polnaya = models.BooleanField(default=False)
-    
+
+    # === Логистика проживания ===
+    nuzhen_prozhivanie = models.BooleanField(
+        default=False, 
+        verbose_name="Нужно проживание"
+    )
+    tip_prozhivaniya = models.CharField(
+        max_length=50,
+        choices=[
+            ('nomer', 'Номер в гостинице'),
+            ('domik', 'Домик на турбазе'),
+            ('palatka', 'Палатка'),
+            ('ne_nuzhno', 'Не нужно'),
+        ],
+        default='nomer',
+        verbose_name="Тип размещения"
+    )
+    preferencii = models.TextField(
+        blank=True, 
+        verbose_name="Предпочтения",
+        help_text="Например: не курящие, тихое место, рядом с другом"
+    )
+    data_zaseleniya = models.DateField(null=True, blank=True, verbose_name="Дата заезда")
+    data_vyseleniya = models.DateField(null=True, blank=True, verbose_name="Дата выезда")
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'uchastnik'
+
+    def __str__(self):
+        return f"{self.familiya} {self.name}"
     
     def doklady_count(self):
         return self.doklad_set.count()
     
-    def __str__(self):
-        return f"{self.familiya} {self.name}"
+    # ✅ Добавлено свойство для проверки заселения
+    @property
+    def has_prozhivanie(self):
+        """Проверяет, заселен ли участник"""
+        return self.uchastnikprozhivanie_set.exists()
 
 
 class UchastnikProzhivanie(models.Model):
@@ -145,13 +261,65 @@ class UchastnikProzhivanie(models.Model):
     data_vyseleniya = models.DateField(blank=True, null=True)
     nomer_komnaty = models.CharField(max_length=50, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'uchastnik_prozhivanie'
         unique_together = ('uchastnik', 'prozhivanie')
-    
+
     def __str__(self):
         return f"{self.uchastnik} ↔ {self.prozhivanie}"
+
+    # ✅ Исправленная версия с транзакцией и валидацией ДО сохранения
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        old_prozhivanie = None
+        
+        # ✅ Получаем старое проживание ДО сохранения (для переселения)
+        if not is_new:
+            old_instance = UchastnikProzhivanie.objects.get(pk=self.pk)
+            old_prozhivanie = old_instance.prozhivanie
+        
+        # ✅ ПРОВЕРКА ДО сохранения (критически важно!)
+        if is_new:
+            if self.prozhivanie.mesta_zanyaty >= self.prozhivanie.vmestimost:
+                raise ValidationError(
+                    f"Нет свободных мест в {self.prozhivanie.nazvanie}. "
+                    f"Занято: {self.prozhivanie.mesta_zanyaty}, "
+                    f"Вместимость: {self.prozhivanie.vmestimost}"
+                )
+        elif old_prozhivanie and old_prozhivanie.id != self.prozhivanie.id:
+            # Переселение: проверяем новое место
+            if self.prozhivanie.mesta_zanyaty >= self.prozhivanie.vmestimost:
+                raise ValidationError(
+                    f"Невозможно переселить: в {self.prozhivanie.nazvanie} нет мест."
+                )
+        
+        # ✅ Сохраняем объект
+        super().save(*args, **kwargs)
+        
+        # ✅ Обновляем счётчики в транзакции
+        with transaction.atomic():
+            if is_new:
+                # Новое заселение
+                self.prozhivanie.mesta_zanyaty += 1
+                self.prozhivanie.save()
+            elif old_prozhivanie and old_prozhivanie.id != self.prozhivanie.id:
+                # Переселение
+                old_prozhivanie.mesta_zanyaty = max(0, old_prozhivanie.mesta_zanyaty - 1)
+                old_prozhivanie.save()
+                
+                self.prozhivanie.mesta_zanyaty += 1
+                self.prozhivanie.save()
+
+    def delete(self, *args, **kwargs):
+        # ✅ Сохраняем ссылку на проживание ДО удаления
+        prozhivanie = self.prozhivanie
+        
+        with transaction.atomic():
+            super().delete(*args, **kwargs)
+            # Освобождение места
+            prozhivanie.mesta_zanyaty = max(0, prozhivanie.mesta_zanyaty - 1)
+            prozhivanie.save()
 
 
 class Program(models.Model):
@@ -159,10 +327,10 @@ class Program(models.Model):
     konferentsiya = models.ForeignKey(Konferentsiya, on_delete=models.CASCADE)
     opisanie = models.TextField(blank=True)
     data_sozdaniya = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'program'
-    
+
     def __str__(self):
         return self.nazvanie
 
@@ -183,12 +351,21 @@ class Doklad(models.Model):
     uchastnik = models.ForeignKey(Uchastnik, on_delete=models.CASCADE)
     konferentsiya = models.ForeignKey(Konferentsiya, on_delete=models.CASCADE)
     vystupaet = models.BooleanField(default=True)
+    
+    sektsiya = models.ForeignKey(
+        'Sekciya', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        verbose_name='Секция'
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'doklad'
-    
+        ordering = ['nazvanie']
+
     def __str__(self):
         return self.nazvanie
 
@@ -207,10 +384,10 @@ class Otkaz(models.Model):
     konferentsiya = models.ForeignKey(Konferentsiya, on_delete=models.CASCADE)
     doklad = models.ForeignKey(Doklad, on_delete=models.SET_NULL, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'otkaz'
-    
+
     def __str__(self):
         return f"Отказ: {self.uchastnik}"
 
@@ -221,24 +398,37 @@ class UchastnikTransfer(models.Model):
     pribitye = models.DateTimeField(blank=True, null=True)
     otpravlenie = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'uchastnik_transfer'
         unique_together = ('uchastnik', 'transfer')
-    
+
     def __str__(self):
         return f"{self.uchastnik} ↔ {self.transfer}"
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        if is_new:
+            self.transfer.mesta_zanyaty += 1
+            self.transfer.save()
+    
+    def delete(self, *args, **kwargs):
+        transfer = self.transfer
+        super().delete(*args, **kwargs)
+        transfer.mesta_zanyaty = max(0, transfer.mesta_zanyaty - 1)
+        transfer.save()
 
 
 class ProzhivanieTransfer(models.Model):
     prozhivanie = models.ForeignKey(Prozhivanie, on_delete=models.CASCADE)
     transfer = models.ForeignKey(Transfer, on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'prozhivanie_transfer'
         unique_together = ('prozhivanie', 'transfer')
-    
+
     def __str__(self):
         return f"{self.prozhivanie} ↔ {self.transfer}"
 
@@ -252,34 +442,33 @@ class Programma(models.Model):
     vremya_okonchaniya = models.DateTimeField()
     nomer_v_programme = models.PositiveIntegerField(default=1)
     ne_vystupaet = models.BooleanField(default=False)
-    pomeshchenie = models.CharField(max_length=100, blank=True)  # ДОБАВЛЕНО
+    pomeshchenie = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'programma'
         ordering = ['vremya_nachala']
-    
+
     def __str__(self):
         title = self.doklad.nazvanie if self.doklad else (str(self.uchastnik) if self.uchastnik else 'Пусто')
         return f"{title} - {self.vremya_nachala.strftime('%d.%m %H:%M')}"
 
 
-# ========== ФИНАНСОВЫЙ МОДУЛЬ (НОВОЕ) ==========
-
+# ========== ФИНАНСОВЫЙ МОДУЛЬ ==========
 class Tarif(models.Model):
     """Тарифы для конференции"""
     konferentsiya = models.ForeignKey(Konferentsiya, on_delete=models.CASCADE)
-    nazvanie = models.CharField(max_length=100)  # "Студент", "Преподаватель", "Иностранный"
+    nazvanie = models.CharField(max_length=100)
     stoimost = models.DecimalField(max_digits=10, decimal_places=2)
     opisanie = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'tarif'
         unique_together = ('konferentsiya', 'nazvanie')
-    
+
     def __str__(self):
         return f"{self.nazvanie} - {self.stoimost} ₽"
 
@@ -300,11 +489,11 @@ class Platezh(models.Model):
     )
     kommentarii = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         db_table = 'platezh'
         ordering = ['-data_platezha']
-    
+
     def __str__(self):
         return f"{self.uchastnik} - {self.summa} ₽ ({self.status})"
 
@@ -326,17 +515,16 @@ class Schet(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'schet'
         ordering = ['-data_vystavleniya']
-    
+
     def __str__(self):
         return f"Счёт №{self.nomer} - {self.uchastnik}"
 
 
-# ========== МОДУЛЬ УВЕДОМЛЕНИЙ (НОВОЕ) ==========
-
+# ========== МОДУЛЬ УВЕДОМЛЕНИЙ ==========
 class EmailShablon(models.Model):
     """Шаблоны email уведомлений"""
     nazvanie = models.CharField(max_length=100)
@@ -353,10 +541,10 @@ class EmailShablon(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'email_shablon'
-    
+
     def __str__(self):
         return self.nazvanie
 
@@ -375,17 +563,16 @@ class UvedomlenieLog(models.Model):
             ('открыто', 'Открыто'),
         ]
     )
-    
+
     class Meta:
         db_table = 'uvedomlenie_log'
         ordering = ['-data_otpravki']
-    
+
     def __str__(self):
         return f"{self.email} - {self.tema} ({self.status})"
 
 
-# ========== РОЛИ ПОЛЬЗОВАТЕЛЕЙ (НОВОЕ) ==========
-
+# ========== РОЛИ ПОЛЬЗОВАТЕЛЕЙ ==========
 class ProfilPolzovatelya(models.Model):
     """Расширение профиля пользователя Django"""
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -402,9 +589,9 @@ class ProfilPolzovatelya(models.Model):
     telefon = models.CharField(max_length=20, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'profil_polzovatelya'
-    
+
     def __str__(self):
         return f"{self.user.username} ({self.rol})"
