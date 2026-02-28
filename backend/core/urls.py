@@ -34,6 +34,8 @@ router.register(r'profili', views.ProfilPolzovatelyaViewSet, basename='profil')
 # Импорт
 router.register(r'import', views.ImportViewSet, basename='import')
 
+router.register(r'settlement', views.SettlementViewSet, basename='settlement')
+
 urlpatterns = [
     path('', include(router.urls)),
     path('import/participants/', views.ImportViewSet.as_view({'post': 'participants'}), name='import-participants'),
@@ -46,4 +48,3 @@ urlpatterns = [
          name='transfer-stats'),
 ]
 
-router.register(r'settlement', SettlementViewSet, basename='settlement')

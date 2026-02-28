@@ -119,7 +119,6 @@ class UchastnikSerializer(serializers.ModelSerializer):
             'sektsiya', 'sektsiya_nazvanie', 'status_uchastnika',
             'kommentarii', 'konferentsiya', 'konferentsiya_nazvanie',
             'nuzhen_transfer', 'tarif', 'tarif_nazvanie', 'oplata_polnaya',
-            # НОВЫЕ ПОЛЯ ЛОГИСТИКИ
             'nuzhen_prozhivanie', 'tip_prozhivaniya', 'preferencii',
             'data_zaseleniya', 'data_vyseleniya', 'has_prozhivanie',
             'created_at', 'updated_at'

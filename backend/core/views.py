@@ -10,6 +10,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.utils import timezone
 from datetime import datetime
 from .permissions import AllowAnyIfDebug, IsAdminOrOrganizer, IsAuthenticatedReadOnly
+from django.db.models import Q
 
 from .models import (
     Konferentsiya, Uchastnik, Prozhivanie, Transfer, Doklad,
@@ -666,12 +667,12 @@ class ZaselenieViewSet(viewsets.ViewSet):
                 {'error': str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        
-# core/views.py
+
+# ========== РАССЕЛЕНИЕ ==========
 
 class SettlementViewSet(viewsets.ViewSet):
     """Управление расселением участников"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
     
     @action(detail=False, methods=['get'])
     def available(self, request):
@@ -684,13 +685,18 @@ class SettlementViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Участники, нуждающиеся в проживании, но не заселенные
+        # Участники конференции, которым нужно проживание
         participants = Uchastnik.objects.filter(
-            konferentsiya_id=konferentsiya_id,
-            nuzhen_prozhivanie=True
-        ).exclude(
-            uchastnikprozhivanie__isnull=False
+            konferentsiya_id=konferentsiya_id
         ).select_related('sektsiya')
+        
+        # Получаем IDs уже заселённых участников
+        settled_ids = UchastnikProzhivanie.objects.filter(
+            uchastnik__konferentsiya_id=konferentsiya_id
+        ).values_list('uchastnik_id', flat=True)
+        
+        # Фильтруем только не заселённых
+        participants = participants.exclude(id__in=settled_ids)
         
         serializer = UchastnikSerializer(participants, many=True)
         return Response(serializer.data)
@@ -700,15 +706,15 @@ class SettlementViewSet(viewsets.ViewSet):
         """Получить варианты проживания для конференции с группировкой"""
         konferentsiya_id = request.query_params.get('konferentsiya')
         
-        if not konferentsiya_id:
-            return Response(
-                {'error': 'Требуется параметр konferentsiya'},
-                status=status.HTTP_400_BAD_REQUEST
+        # Если конференция не указана, возвращаем все проживания
+        if konferentsiya_id:
+            prozhivaniya = Prozhivanie.objects.filter(
+                konferentsiya_id=konferentsiya_id
+            ).order_by('turbaza_nazvanie', 'kategoriya_nomerov')
+        else:
+            prozhivaniya = Prozhivanie.objects.all().order_by(
+                'turbaza_nazvanie', 'kategoriya_nomerov'
             )
-        
-        prozhivaniya = Prozhivanie.objects.filter(
-            konferentsiya_id=konferentsiya_id
-        ).order_by('turbaza_nazvanie', 'kategoriya_nomerov')
         
         # Группировка по турбазам
         result = {}
@@ -729,9 +735,8 @@ class SettlementViewSet(viewsets.ViewSet):
                 'nazvanie': proj.nazvanie,
                 'vmestimost': proj.vmestimost,
                 'mesta_zanyaty': proj.mesta_zanyaty,
-                'mesta_svobodnye': proj.get_free_places(),
+                'mesta_svobodnye': max(0, proj.vmestimost - proj.mesta_zanyaty),
                 'stoimost': str(proj.stoimost),
-                'can_accommodate': proj.can_accommodate(),
                 'kolvo_domikov': proj.kolvo_domikov
             })
         
@@ -742,9 +747,6 @@ class SettlementViewSet(viewsets.ViewSet):
         """Заселить участника в проживание"""
         uchastnik_id = request.data.get('uchastnik_id')
         prozhivanie_id = request.data.get('prozhivanie_id')
-        data_zaseleniya = request.data.get('data_zaseleniya')
-        data_vyseleniya = request.data.get('data_vyseleniya')
-        nomer_komnaty = request.data.get('nomer_komnaty', '')
         
         try:
             uchastnik = Uchastnik.objects.get(id=uchastnik_id)
@@ -758,9 +760,10 @@ class SettlementViewSet(viewsets.ViewSet):
                 )
             
             # Проверка: есть ли свободные места?
-            if not prozhivanie.can_accommodate():
+            free_places = prozhivanie.vmestimost - prozhivanie.mesta_zanyaty
+            if free_places <= 0:
                 return Response(
-                    {'error': f'Нет свободных мест в "{prozhivanie.nazvanie}"'},
+                    {'error': 'Нет свободных мест'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -768,12 +771,11 @@ class SettlementViewSet(viewsets.ViewSet):
             UchastnikProzhivanie.objects.create(
                 uchastnik=uchastnik,
                 prozhivanie=prozhivanie,
-                data_zaseleniya=data_zaseleniya or uchastnik.data_zaseleniya,
-                data_vyseleniya=data_vyseleniya or uchastnik.data_vyseleniya,
-                nomer_komnaty=nomer_komnaty
             )
             
-            # Проживание обновит счётчики автоматически через save()
+            # Обновляем счётчик занятых мест
+            prozhivanie.mesta_zanyaty += 1
+            prozhivanie.save()
             
             return Response({
                 'success': True,
@@ -781,7 +783,7 @@ class SettlementViewSet(viewsets.ViewSet):
                 'prozhivanie': {
                     'id': prozhivanie.id,
                     'mesta_zanyaty': prozhivanie.mesta_zanyaty,
-                    'mesta_svobodnye': prozhivanie.get_free_places()
+                    'mesta_svobodnye': prozhivanie.vmestimost - prozhivanie.mesta_zanyaty
                 }
             })
             
@@ -807,8 +809,12 @@ class SettlementViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Удаление связи автоматически обновит счётчики через delete()
+            prozhivanie = svyaz.prozhivanie
             svyaz.delete()
+            
+            # Обновляем счётчик
+            prozhivanie.mesta_zanyaty = max(0, prozhivanie.mesta_zanyaty - 1)
+            prozhivanie.save()
             
             return Response({
                 'success': True,

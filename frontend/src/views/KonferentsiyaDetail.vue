@@ -305,7 +305,7 @@
           </div>
         </div>
         
-        <!-- Вкладка: Доклады (группировка по секциям) -->
+        <!-- Вкладка: Доклады -->
         <div class="tab-pane fade" id="reports-tab">
           <div class="tab-header">
             <h5><i class="bi bi-file-earmark-text"></i> Доклады</h5>
@@ -314,41 +314,32 @@
             </router-link>
           </div>
           
-          <div v-if="reportsBySection.length > 0">
-            <div v-for="sectionGroup in reportsBySection" :key="sectionGroup.sectionId" class="section-group mb-4">
-              <div class="section-group-header">
-                <i class="bi bi-layers"></i>
-                <h6>{{ sectionGroup.sectionName || 'Без секции' }}</h6>
-                <span class="badge bg-primary">{{ sectionGroup.reports.length }} докладов</span>
-              </div>
-              
-              <div class="table-responsive">
-                <table class="table table-hover table-sm">
-                  <thead>
-                    <tr>
-                      <th>Название</th>
-                      <th>Автор</th>
-                      <th>Статус</th>
-                      <th>Дата подачи</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="report in sectionGroup.reports" :key="report.id">
-                      <td>{{ report.nazvanie }}</td>
-                      <td>{{ report.uchastnik_fio }}</td>
-                      <td>
-                        <span class="status-badge" :class="'status-' + report.status_doklada">
-                          {{ getReportStatusLabel(report.status_doklada) }}
-                        </span>
-                      </td>
-                      <td>{{ formatDate(report.data_podachi) }}</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          <div v-if="reports.length > 0" class="table-responsive">
+            <table class="table table-hover">
+              <thead>
+                <tr>
+                  <th>Название</th>
+                  <th>Автор</th>
+                  <th>Секция</th>
+                  <th>Статус</th>
+                  <th>Дата подачи</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="report in reports" :key="report.id">
+                  <td>{{ report.nazvanie }}</td>
+                  <td>{{ report.uchastnik_fio }}</td>
+                  <td>{{ report.sektsiya_nazvanie || '—' }}</td>
+                  <td>
+                    <span class="status-badge" :class="'status-' + report.status_doklada">
+                      {{ getReportStatusLabel(report.status_doklada) }}
+                    </span>
+                  </td>
+                  <td>{{ formatDate(report.data_podachi) }}</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-          
           <div v-else class="empty-state">
             <i class="bi bi-inbox"></i>
             <p>Докладов пока нет</p>
@@ -390,218 +381,231 @@
         
         <!-- Вкладка: Логистика -->
         <div class="tab-pane fade" id="logistics-tab">
-            <div class="logistics-grid">
-    <!-- Проживание -->
-    <div class="logistics-card">
-      <div class="logistics-header">
-        <i class="bi bi-hotel"></i>
-        <h5>Проживание</h5>
-      </div>
-      <div class="logistics-stats">
-        <div class="logistic-stat">
-          <span class="stat-value">{{ stats.accommodation }}</span>
-          <span class="stat-label">Забронировано</span>
-        </div>
-      </div>
-      <div class="d-flex gap-2 mt-3">
-        <router-link to="/prozhivanies" class="btn btn-sm btn-outline-primary flex-grow-1">
-          Управление
-        </router-link>
-        <button class="btn btn-sm btn-success flex-grow-1" @click="openSettlementModal()">
-          <i class="bi bi-person-fill-up"></i> Расселение
-        </button>
-      </div>
-    </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-<!-- Модальное окно расселения (добавьте в конец template) -->
-<div class="modal fade modal-xl" ref="settlementModalRef" tabindex="-1">
-  <div class="modal-dialog modal-fullscreen-lg-down">
-    <div class="modal-content">
-      <div class="modal-header bg-primary text-white">
-        <h5 class="modal-title">
-          <i class="bi bi-person-fill-up"></i> Расселение участников
-        </h5>
-        <button type="button" class="btn-close btn-close-white" @click="closeSettlementModal()"></button>
-      </div>
-      
-      <div class="modal-body p-0">
-        <div class="row g-0 h-100">
-          
-          <!-- ЛЕВАЯ КОЛОНКА: Участники -->
-          <div class="col-lg-5 border-end">
-            <div class="p-3 border-bottom bg-light">
-              <h6 class="mb-2"><i class="bi bi-people"></i> Участники без проживания</h6>
-              <div class="input-group input-group-sm">
-                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                <input 
-                  type="text" 
-                  class="form-control" 
-                  v-model="settlementSearch"
-                  placeholder="Поиск по ФИО, email..."
-                  @input="filterAvailableParticipants"
-                >
+          <div class="logistics-grid">
+            <!-- Проживание -->
+            <div class="logistics-card">
+              <div class="logistics-header">
+                <i class="bi bi-hotel"></i>
+                <h5>Проживание</h5>
               </div>
-              <div class="mt-2 text-muted small">
-                Найдено: {{ filteredAvailableParticipants.length }} из {{ availableParticipants.length }}
+              <div class="logistics-stats">
+                <div class="logistic-stat">
+                  <span class="stat-value">{{ stats.accommodation }}</span>
+                  <span class="stat-label">Забронировано</span>
+                </div>
+              </div>
+              <div class="d-flex gap-2 mt-3">
+                <router-link to="/prozhivanies" class="btn btn-sm btn-outline-primary flex-grow-1">
+                  Управление
+                </router-link>
+                <button class="btn btn-sm btn-success flex-grow-1" @click="openSettlementModal()">
+                  <i class="bi bi-person-fill-up"></i> Расселение
+                </button>
               </div>
             </div>
             
-            <div class="participants-list p-2" style="max-height: calc(100vh - 250px); overflow-y: auto;">
-              <div 
-                v-for="participant in filteredAvailableParticipants" 
-                :key="participant.id"
-                class="participant-card mb-2"
-                draggable="true"
-                @dragstart="onDragStart($event, participant)"
-                @dragend="onDragEnd"
-              >
-                <div class="d-flex align-items-center gap-2">
-                  <i class="bi bi-grip-vertical text-muted"></i>
-                  <div class="flex-grow-1">
-                    <div class="fw-semibold">{{ participant.familiya }} {{ participant.name }}</div>
-                    <div class="small text-muted">{{ participant.email }}</div>
-                    <div v-if="participant.sektsiya_nazvanie" class="small">
-                      <span class="badge bg-info text-dark">{{ participant.sektsiya_nazvanie }}</span>
+            <!-- Трансфер -->
+            <div class="logistics-card">
+              <div class="logistics-header">
+                <i class="bi bi-bus-front"></i>
+                <h5>Трансфер</h5>
+              </div>
+              <div class="logistics-stats">
+                <div class="logistic-stat">
+                  <span class="stat-value">{{ stats.transfers }}</span>
+                  <span class="stat-label">Запланировано</span>
+                </div>
+              </div>
+              <router-link to="/transfers" class="btn btn-sm btn-outline-primary mt-3">
+                Управление
+              </router-link>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Модальное окно расселения -->
+    <div class="modal fade modal-xl" ref="settlementModalRef" tabindex="-1">
+      <div class="modal-dialog modal-fullscreen-lg-down">
+        <div class="modal-content">
+          <div class="modal-header bg-primary text-white">
+            <h5 class="modal-title">
+              <i class="bi bi-person-fill-up"></i> Расселение участников
+            </h5>
+            <button type="button" class="btn-close btn-close-white" @click="closeSettlementModal()"></button>
+          </div>
+          
+          <div class="modal-body p-0">
+            <div class="row g-0 h-100">
+              <!-- ЛЕВАЯ КОЛОНКА: Участники -->
+              <div class="col-lg-5 border-end">
+                <div class="p-3 border-bottom bg-light">
+                  <h6 class="mb-2"><i class="bi bi-people"></i> Участники без проживания</h6>
+                  <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input 
+                      type="text" 
+                      class="form-control" 
+                      v-model="settlementSearch"
+                      placeholder="Поиск по ФИО, email..."
+                      @input="filterAvailableParticipants"
+                    >
+                  </div>
+                  <div class="mt-2 text-muted small">
+                    Найдено: {{ filteredAvailableParticipants.length }} из {{ availableParticipants.length }}
+                  </div>
+                </div>
+                
+                <div class="participants-list p-2" style="max-height: calc(100vh - 250px); overflow-y: auto;">
+                  <div 
+                    v-for="participant in filteredAvailableParticipants" 
+                    :key="participant.id"
+                    class="participant-card mb-2"
+                    draggable="true"
+                    @dragstart="onDragStart($event, participant)"
+                    @dragend="onDragEnd"
+                  >
+                    <div class="d-flex align-items-center gap-2">
+                      <i class="bi bi-grip-vertical text-muted"></i>
+                      <div class="flex-grow-1">
+                        <div class="fw-semibold">{{ participant.familiya }} {{ participant.name }}</div>
+                        <div class="small text-muted">{{ participant.email }}</div>
+                        <div v-if="participant.sektsiya_nazvanie" class="small">
+                          <span class="badge bg-info text-dark">{{ participant.sektsiya_nazvanie }}</span>
+                        </div>
+                      </div>
+                      <i class="bi bi-arrows-move text-primary"></i>
                     </div>
                   </div>
-                  <i class="bi bi-arrows-move text-primary"></i>
+                  
+                  <div v-if="filteredAvailableParticipants.length === 0" class="text-center text-muted py-4">
+                    <i class="bi bi-inbox fs-1"></i>
+                    <p class="mt-2">Нет доступных участников</p>
+                  </div>
                 </div>
               </div>
               
-              <div v-if="filteredAvailableParticipants.length === 0" class="text-center text-muted py-4">
-                <i class="bi bi-inbox fs-1"></i>
-                <p class="mt-2">Нет доступных участников</p>
-              </div>
-            </div>
-          </div>
-          
-          <!-- ПРАВАЯ КОЛОНКА: Проживания -->
-          <div class="col-lg-7">
-            <div class="p-3 border-bottom bg-light">
-              <h6 class="mb-2"><i class="bi bi-hotel"></i> Варианты проживания</h6>
-              <div class="d-flex gap-2">
-                <select v-model="turbazaFilter" class="form-select form-select-sm" @change="filterAccommodations">
-                  <option value="">Все турбазы</option>
-                  <option v-for="turbaza in Object.keys(groupedAccommodations)" :key="turbaza" :value="turbaza">
-                    {{ turbaza }}
-                  </option>
-                </select>
-                <select v-model="categoryFilter" class="form-select form-select-sm" @change="filterAccommodations">
-                  <option value="">Все категории</option>
-                  <option value="одноместный">Одноместный</option>
-                  <option value="двухместный">Двухместный</option>
-                  <option value="трёхместный">Трёхместный</option>
-                  <option value="люкс">Люкс</option>
-                </select>
-              </div>
-            </div>
-            
-            <div class="accommodations-list p-3" style="max-height: calc(100vh - 250px); overflow-y: auto;">
-              <div 
-                v-for="(turbazaData, turbazaName) in filteredAccommodations" 
-                :key="turbazaName"
-                class="turbaza-section mb-4"
-              >
-                <h6 class="text-primary mb-2">
-                  <i class="bi bi-building"></i> {{ turbazaName }}
-                </h6>
-                
-                <div 
-                  v-for="(prozhivaniya, category) in turbazaData.categories" 
-                  :key="category"
-                  class="category-section mb-3"
-                >
-                  <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="badge bg-secondary">{{ category }}</span>
-                    <span class="small text-muted">
-                      Свободно: {{ getTotalFreePlaces(prozhivaniya) }}
-                    </span>
+              <!-- ПРАВАЯ КОЛОНКА: Проживания -->
+              <div class="col-lg-7">
+                <div class="p-3 border-bottom bg-light">
+                  <h6 class="mb-2"><i class="bi bi-hotel"></i> Варианты проживания</h6>
+                  <div class="d-flex gap-2">
+                    <select v-model="turbazaFilter" class="form-select form-select-sm" @change="filterAccommodations">
+                      <option value="">Все турбазы</option>
+                      <option v-for="turbaza in Object.keys(groupedAccommodations)" :key="turbaza" :value="turbaza">
+                        {{ turbaza }}
+                      </option>
+                    </select>
+                    <select v-model="categoryFilter" class="form-select form-select-sm" @change="filterAccommodations">
+                      <option value="">Все категории</option>
+                      <option value="одноместный">Одноместный</option>
+                      <option value="двухместный">Двухместный</option>
+                      <option value="трёхместный">Трёхместный</option>
+                      <option value="люкс">Люкс</option>
+                    </select>
                   </div>
-                  
-                  <div class="row g-2">
+                </div>
+                
+                <div class="accommodations-list p-3" style="max-height: calc(100vh - 250px); overflow-y: auto;">
+                  <div 
+                    v-for="(turbazaData, turbazaName) in filteredAccommodations" 
+                    :key="turbazaName"
+                    class="turbaza-section mb-4"
+                  >
+                    <h6 class="text-primary mb-2">
+                      <i class="bi bi-building"></i> {{ turbazaName }}
+                    </h6>
+                    
                     <div 
-                      v-for="proj in prozhivaniya" 
-                      :key="proj.id"
-                      class="col-md-6"
+                      v-for="(prozhivaniya, category) in turbazaData.categories" 
+                      :key="category"
+                      class="category-section mb-3"
                     >
-                      <div 
-                        class="accommodation-card p-3 border rounded"
-                        :class="{
-                          'border-success bg-success-subtle': proj.mesta_svobodnye > 0,
-                          'border-danger bg-danger-subtle': proj.mesta_svobodnye === 0
-                        }"
-                        @dragover.prevent="onDragOver($event)"
-                        @drop="onDrop($event, proj)"
-                      >
-                        <div class="d-flex justify-content-between align-items-start mb-2">
-                          <div>
-                            <div class="fw-semibold">{{ proj.nazvanie }}</div>
-                            <div class="small text-muted">{{ proj.stoimost }} ₽/ночь</div>
-                          </div>
-                          <span 
-                            class="badge" 
-                            :class="proj.mesta_svobodnye > 0 ? 'bg-success' : 'bg-danger'"
-                          >
-                            {{ proj.mesta_zanyaty }}/{{ proj.vmestimost }}
-                          </span>
-                        </div>
-                        
-                        <!-- Прогресс-бар заполненности -->
-                        <div class="progress mb-2" style="height: 6px;">
+                      <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="badge bg-secondary">{{ category }}</span>
+                        <span class="small text-muted">
+                          Свободно: {{ getTotalFreePlaces(prozhivaniya) }}
+                        </span>
+                      </div>
+                      
+                      <div class="row g-2">
+                        <div v-for="proj in prozhivaniya" :key="proj.id" class="col-md-6">
                           <div 
-                            class="progress-bar" 
-                            :class="getProgressClass(proj.mesta_zanyaty / proj.vmestimost)"
-                            :style="{ width: `${(proj.mesta_zanyaty / proj.vmestimost) * 100}%` }"
-                          ></div>
-                        </div>
-                        
-                        <!-- Статус -->
-                        <div v-if="proj.mesta_svobodnye === 0" class="text-danger small">
-                          <i class="bi bi-x-circle"></i> Нет мест
-                        </div>
-                        <div v-else class="text-success small">
-                          <i class="bi bi-check-circle"></i> {{ proj.mesta_svobodnye }} мест свободно
-                        </div>
-                        
-                        <!-- Подсказка для drag-and-drop -->
-                        <div v-if="draggedParticipant && proj.mesta_svobodnye > 0" 
-                             class="mt-2 small text-primary">
-                          <i class="bi bi-plus-circle"></i> Перетащите участника сюда
+                            class="accommodation-card p-3 border rounded"
+                            :class="{
+                              'border-success bg-success-subtle': proj.mesta_svobodnye > 0,
+                              'border-danger bg-danger-subtle': proj.mesta_svobodnye === 0
+                            }"
+                            @dragover.prevent="onDragOver($event)"
+                            @drop="onDrop($event, proj)"
+                          >
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                              <div>
+                                <div class="fw-semibold">{{ proj.nazvanie }}</div>
+                                <div class="small text-muted">{{ proj.stoimost }} ₽/ночь</div>
+                              </div>
+                              <span 
+                                class="badge" 
+                                :class="proj.mesta_svobodnye > 0 ? 'bg-success' : 'bg-danger'"
+                              >
+                                {{ proj.mesta_zanyaty }}/{{ proj.vmestimost }}
+                              </span>
+                            </div>
+                            
+                            <!-- Прогресс-бар заполненности -->
+                            <div class="progress mb-2" style="height: 6px;">
+                              <div 
+                                class="progress-bar" 
+                                :class="getProgressClass(proj.mesta_zanyaty / proj.vmestimost)"
+                                :style="{ width: `${(proj.mesta_zanyaty / proj.vmestimost) * 100}%` }"
+                              ></div>
+                            </div>
+                            
+                            <!-- Статус -->
+                            <div v-if="proj.mesta_svobodnye === 0" class="text-danger small">
+                              <i class="bi bi-x-circle"></i> Нет мест
+                            </div>
+                            <div v-else class="text-success small">
+                              <i class="bi bi-check-circle"></i> {{ proj.mesta_svobodnye }} мест свободно
+                            </div>
+                            
+                            <!-- Подсказка для drag-and-drop -->
+                            <div v-if="draggedParticipant && proj.mesta_svobodnye > 0" 
+                                 class="mt-2 small text-primary">
+                              <i class="bi bi-plus-circle"></i> Перетащите участника сюда
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
+                  
+                  <div v-if="Object.keys(filteredAccommodations).length === 0" 
+                       class="text-center text-muted py-4">
+                    <i class="bi bi-building-exclamation fs-1"></i>
+                    <p class="mt-2">Нет вариантов проживания</p>
+                  </div>
                 </div>
-              </div>
-              
-              <div v-if="Object.keys(filteredAccommodations).length === 0" 
-                   class="text-center text-muted py-4">
-                <i class="bi bi-building-exclamation fs-1"></i>
-                <p class="mt-2">Нет вариантов проживания</p>
               </div>
             </div>
           </div>
           
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" @click="closeSettlementModal()">Закрыть</button>
+            <button type="button" class="btn btn-outline-primary" @click="refreshSettlementData()">
+              <i class="bi bi-arrow-clockwise"></i> Обновить
+            </button>
+          </div>
         </div>
-      </div>
-      
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" @click="closeSettlementModal()">Закрыть</button>
-        <button type="button" class="btn btn-outline-primary" @click="refreshSettlementData()">
-          <i class="bi bi-arrow-clockwise"></i> Обновить
-        </button>
       </div>
     </div>
   </div>
-</div>
 </template>
 
 <script>
 import { konferentsiyaAPI, uchastnikAPI, sekciyaAPI, dokladAPI, programmaAPI, prozhivanieAPI, transferAPI } from '../services/api'
+import axios from 'axios'  // ✅ Добавлен импорт axios
 import { Modal } from 'bootstrap'
 
 export default {
@@ -643,7 +647,8 @@ export default {
         sektsiya: null,
         status_uchastnika: 'зарегистрирован',
         konferentsiya: null
-      }
+      },
+      // Для модального окна расселения
       settlementModal: null,
       availableParticipants: [],
       filteredAvailableParticipants: [],
@@ -652,13 +657,13 @@ export default {
       settlementSearch: '',
       turbazaFilter: '',
       categoryFilter: '',
-      draggedParticipant: null,
+      draggedParticipant: null
     }
   },
   
   computed: {
     sortedProgramItems() {
-      return [...this.programItems].sort((a, b) => 
+      return [...this.programItems].sort((a, b) =>
         new Date(a.vremya_nachala) - new Date(b.vremya_nachala)
       )
     },
@@ -666,11 +671,9 @@ export default {
     // Группировка докладов по секциям
     reportsBySection() {
       const groups = {}
-      
       this.reports.forEach(report => {
         const sectionId = report.sektsiya || 'no-section'
         const sectionName = report.sektsiya_nazvanie || 'Без секции'
-        
         if (!groups[sectionId]) {
           groups[sectionId] = {
             sectionId: sectionId,
@@ -678,211 +681,24 @@ export default {
             reports: []
           }
         }
-        
         groups[sectionId].reports.push(report)
       })
-      
       return Object.values(groups)
     }
   },
   
   mounted() {
-    // Инициализация модального окна
+    // Инициализация модальных окон
     this.addParticipantModal = new Modal(this.$refs.addParticipantModalRef)
+    this.settlementModal = new Modal(this.$refs.settlementModalRef)
     
     this.conferenceId = this.$route.params.id
     this.loadData()
-    this.settlementModal = new Modal(this.$refs.settlementModalRef)
   },
   
   methods: {
     // ========== ЗАГРУЗКА ДАННЫХ ==========
-  async openSettlementModal() {
-      await this.loadSettlementData()
-      this.settlementModal.show()
-    },
     
-    closeSettlementModal() {
-      this.settlementModal.hide()
-      this.resetSettlementFilters()
-    },
-    
-    async loadSettlementData() {
-      try {
-        // Загрузка доступных участников
-        const participantsResponse = await uchastnikAPI.getAll()
-        const allParticipants = participantsResponse.data.results || participantsResponse.data
-        this.availableParticipants = allParticipants.filter(p => 
-          p.konferentsiya == this.conferenceId && 
-          p.nuzhen_prozhivanie && 
-          !p.has_prozhivanie
-        )
-        this.filteredAvailableParticipants = [...this.availableParticipants]
-        
-        // Загрузка вариантов проживания
-        const accommodationsResponse = await fetch(
-          `/api/settlement/accommodations/?konferentsiya=${this.conferenceId}`
-        )
-        this.groupedAccommodations = await accommodationsResponse.json()
-        this.filteredAccommodations = { ...this.groupedAccommodations }
-        
-      } catch (error) {
-        console.error('Ошибка загрузки данных расселения:', error)
-        alert('Не удалось загрузить данные для расселения')
-      }
-    },
-    
-    async refreshSettlementData() {
-      await this.loadSettlementData()
-      alert('Данные обновлены')
-    },
-    
-    resetSettlementFilters() {
-      this.settlementSearch = ''
-      this.turbazaFilter = ''
-      this.categoryFilter = ''
-      this.filteredAvailableParticipants = [...this.availableParticipants]
-      this.filteredAccommodations = { ...this.groupedAccommodations }
-    },
-    
-    filterAvailableParticipants() {
-      const search = this.settlementSearch.toLowerCase()
-      this.filteredAvailableParticipants = this.availableParticipants.filter(p => 
-        p.familiya.toLowerCase().includes(search) ||
-        p.name.toLowerCase().includes(search) ||
-        p.email.toLowerCase().includes(search)
-      )
-    },
-    
-    filterAccommodations() {
-      const filtered = {}
-      
-      for (const [turbaza, data] of Object.entries(this.groupedAccommodations)) {
-        // Фильтр по турбазе
-        if (this.turbazaFilter && turbaza !== this.turbazaFilter) continue
-        
-        const categories = {}
-        for (const [category, prozhivaniya] of Object.entries(data.categories)) {
-          // Фильтр по категории
-          if (this.categoryFilter && category !== this.categoryFilter) continue
-          
-          // Показываем только если есть свободные места или для наглядности все
-          categories[category] = prozhivaniya
-        }
-        
-        if (Object.keys(categories).length > 0) {
-          filtered[turbaza] = { ...data, categories }
-        }
-      }
-      
-      this.filteredAccommodations = filtered
-    },
-    
-    getTotalFreePlaces(prozhivaniya) {
-      return prozhivaniya.reduce((sum, p) => sum + p.mesta_svobodnye, 0)
-    },
-    
-    getProgressClass(ratio) {
-      if (ratio < 0.5) return 'bg-low'
-      if (ratio < 0.9) return 'bg-medium'
-      return 'bg-high'
-    },
-    
-    // ========== DRAG AND DROP ==========
-    
-    onDragStart(event, participant) {
-      this.draggedParticipant = participant
-      event.dataTransfer.setData('text/plain', participant.id)
-      event.dataTransfer.effectAllowed = 'move'
-      
-      // Визуальная обратная связь
-      const el = event.target.closest('.participant-card')
-      if (el) el.classList.add('dragging')
-    },
-    
-    onDragEnd(event) {
-      const el = event.target.closest('.participant-card')
-      if (el) el.classList.remove('dragging')
-      this.draggedParticipant = null
-    },
-    
-    onDragOver(event) {
-      event.preventDefault()
-      event.dataTransfer.dropEffect = 'move'
-      
-      // Визуальная обратная связь
-      const el = event.target.closest('.accommodation-card')
-      if (el && !el.classList.contains('drag-over')) {
-        el.classList.add('drag-over')
-      }
-    },
-    
-    async onDrop(event, prozhivanie) {
-      event.preventDefault()
-      
-      // Убираем визуальные эффекты
-      const cards = document.querySelectorAll('.accommodation-card')
-      cards.forEach(card => card.classList.remove('drag-over'))
-      
-      if (!this.draggedParticipant) return
-      
-      // Проверка: есть ли места?
-      if (prozhivanie.mesta_svobodnye <= 0) {
-        alert('В этом варианте проживания нет свободных мест!')
-        return
-      }
-      
-      // Подтверждение
-      const confirmMsg = `Заселить ${this.draggedParticipant.familiya} ${this.draggedParticipant.name} в "${prozhivanie.nazvanie}"?`
-      if (!confirm(confirmMsg)) return
-      
-      try {
-        const response = await fetch('/api/settlement/settle/', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            uchastnik_id: this.draggedParticipant.id,
-            prozhivanie_id: prozhivanie.id
-          })
-        })
-        
-        const result = await response.json()
-        
-        if (response.ok) {
-          // Успех: обновляем интерфейс
-          alert(result.message)
-          
-          // Обновляем счётчик в карточке проживания
-          const index = prozhivanie.mesta_zanyaty
-          prozhivanie.mesta_zanyaty = result.prozhivanie.mesta_zanyaty
-          prozhivanie.mesta_svobodnye = result.prozhivanie.mesta_svobodnye
-          
-          // Удаляем участника из списка доступных
-          this.availableParticipants = this.availableParticipants.filter(
-            p => p.id !== this.draggedParticipant.id
-          )
-          this.filteredAvailableParticipants = this.filteredAvailableParticipants.filter(
-            p => p.id !== this.draggedParticipant.id
-          )
-          
-          // Обновляем статистику в главной вкладке
-          this.stats.accommodation++
-          
-        } else {
-          alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'))
-        }
-        
-      } catch (error) {
-        console.error('Ошибка заселения:', error)
-        alert('Ошибка при заселении участника')
-      }
-      
-      this.draggedParticipant = null
-    }
-  }
-
     async loadData() {
       await this.loadConference()
       await Promise.all([
@@ -977,7 +793,6 @@ export default {
     // ========== ДОБАВЛЕНИЕ УЧАСТНИКА ==========
     
     addParticipantToConference() {
-      // Сбрасываем форму
       this.newParticipant = {
         familiya: '',
         name: '',
@@ -990,11 +805,7 @@ export default {
         status_uchastnika: 'зарегистрирован',
         konferentsiya: this.conferenceId
       }
-      
-      // Загружаем секции конференции
       this.loadConferenceSections()
-      
-      // Показываем модальное окно
       this.addParticipantModal.show()
     },
     
@@ -1003,7 +814,6 @@ export default {
     },
     
     async saveParticipantToConference() {
-      // Валидация обязательных полей
       if (!this.newParticipant.familiya || !this.newParticipant.name || !this.newParticipant.email) {
         alert('Заполните обязательные поля: Фамилия, Имя, Email')
         return
@@ -1017,10 +827,8 @@ export default {
         
         this.participants.push(response.data)
         this.stats.participants = this.participants.length
-        
         this.closeAddParticipantModal()
         alert(`Участник "${this.newParticipant.familiya} ${this.newParticipant.name}" добавлен`)
-        
       } catch (error) {
         console.error('Ошибка добавления участника:', error)
         alert('Ошибка: ' + (error.response?.data?.error || error.message))
@@ -1029,6 +837,205 @@ export default {
     
     editParticipant(participant) {
       this.$router.push(`/uchastniks?id=${participant.id}`)
+    },
+    
+    // ========== РАССЕЛЕНИЕ ==========
+    
+    async openSettlementModal() {
+      await this.loadSettlementData()
+      this.settlementModal.show()
+    },
+    
+    closeSettlementModal() {
+      this.settlementModal.hide()
+      this.resetSettlementFilters()
+    },
+    
+    async loadSettlementData() {
+  try {
+    console.log('Загрузка данных расселения для конференции:', this.conferenceId)
+    
+    // Загрузка доступных участников
+    const participantsResponse = await uchastnikAPI.getAll()
+    const allParticipants = participantsResponse.data.results || participantsResponse.data
+    
+    // Загружаем заселённых участников
+    const settledResponse = await axios.get(
+      `settlement/available/`,
+      { params: { konferentsiya: this.conferenceId } }
+    )
+    const settledData = settledResponse.data.results || settledResponse.data
+    const settledIds = Array.isArray(settledData) ? settledData.map(p => p.id) : []
+    
+    console.log('Заселённые участники IDs:', settledIds)
+    
+    // Фильтруем: только участники этой конференции и не заселённые
+    this.availableParticipants = allParticipants.filter(p => 
+      p.konferentsiya == this.conferenceId && !settledIds.includes(p.id)
+    )
+    this.filteredAvailableParticipants = [...this.availableParticipants]
+    
+    console.log('Доступно участников:', this.availableParticipants.length)
+    
+    // Загрузка вариантов проживания
+    const accommodationsResponse = await axios.get(
+      `settlement/accommodations/`,
+      { params: { konferentsiya: this.conferenceId } }
+    )
+    
+    console.log('Ответ API проживания:', accommodationsResponse.data)
+    console.log('Ключи объекта:', Object.keys(accommodationsResponse.data))
+    
+    this.groupedAccommodations = accommodationsResponse.data
+    this.filteredAccommodations = { ...this.groupedAccommodations }
+    
+    console.log('Вариантов проживания (турбаз):', Object.keys(this.groupedAccommodations).length)
+    
+  } catch (error) {
+    console.error('Ошибка загрузки данных расселения:', error)
+    console.error('Ответ сервера:', error.response?.data)
+    alert('Не удалось загрузить данные для расселения: ' + error.message)
+  }
+},
+    
+    async refreshSettlementData() {
+      await this.loadSettlementData()
+      alert('Данные обновлены')
+    },
+    
+    resetSettlementFilters() {
+      this.settlementSearch = ''
+      this.turbazaFilter = ''
+      this.categoryFilter = ''
+      this.filteredAvailableParticipants = [...this.availableParticipants]
+      this.filteredAccommodations = { ...this.groupedAccommodations }
+    },
+    
+    filterAvailableParticipants() {
+      const search = this.settlementSearch.toLowerCase()
+      this.filteredAvailableParticipants = this.availableParticipants.filter(p =>
+        p.familiya.toLowerCase().includes(search) ||
+        p.name.toLowerCase().includes(search) ||
+        p.email.toLowerCase().includes(search)
+      )
+    },
+    
+    filterAccommodations() {
+      const filtered = {}
+      for (const [turbaza, data] of Object.entries(this.groupedAccommodations)) {
+        if (this.turbazaFilter && turbaza !== this.turbazaFilter) continue
+        
+        const categories = {}
+        for (const [category, prozhivaniya] of Object.entries(data.categories)) {
+          if (this.categoryFilter && category !== this.categoryFilter) continue
+          categories[category] = prozhivaniya
+        }
+        
+        if (Object.keys(categories).length > 0) {
+          filtered[turbaza] = { ...data, categories }
+        }
+      }
+      this.filteredAccommodations = filtered
+    },
+    
+    getTotalFreePlaces(prozhivaniya) {
+      return prozhivaniya.reduce((sum, p) => sum + p.mesta_svobodnye, 0)
+    },
+    
+    getProgressClass(ratio) {
+      if (ratio < 0.5) return 'bg-low'
+      if (ratio < 0.9) return 'bg-medium'
+      return 'bg-high'
+    },
+    
+    // ========== DRAG AND DROP ==========
+    
+    onDragStart(event, participant) {
+      this.draggedParticipant = participant
+      event.dataTransfer.setData('text/plain', participant.id)
+      event.dataTransfer.effectAllowed = 'move'
+      
+      const el = event.target.closest('.participant-card')
+      if (el) el.classList.add('dragging')
+    },
+    
+    onDragEnd(event) {
+      const el = event.target.closest('.participant-card')
+      if (el) el.classList.remove('dragging')
+      this.draggedParticipant = null
+    },
+    
+    onDragOver(event) {
+      event.preventDefault()
+      event.dataTransfer.dropEffect = 'move'
+      
+      const el = event.target.closest('.accommodation-card')
+      if (el && !el.classList.contains('drag-over')) {
+        el.classList.add('drag-over')
+      }
+    },
+    
+    async onDrop(event, prozhivanie) {
+      event.preventDefault()
+      
+      const cards = document.querySelectorAll('.accommodation-card')
+      cards.forEach(card => card.classList.remove('drag-over'))
+      
+      if (!this.draggedParticipant) return
+      
+      // Проверка: есть ли места?
+      if (prozhivanie.mesta_svobodnye <= 0) {
+        alert('В этом варианте проживания нет свободных мест!')
+        return
+      }
+      
+      // Подтверждение
+      const confirmMsg = `Заселить ${this.draggedParticipant.familiya} ${this.draggedParticipant.name} в "${prozhivanie.nazvanie}"?`
+      if (!confirm(confirmMsg)) return
+      
+      try {
+        console.log('Заселение участника:', this.draggedParticipant.id, 'в проживание:', prozhivanie.id)
+        
+        const response = await axios.post(
+          `settlement/settle/`,
+          {
+            uchastnik_id: this.draggedParticipant.id,
+            prozhivanie_id: prozhivanie.id
+          }
+        )
+        
+        const result = response.data
+        
+        if (result.success) {
+          alert(result.message)
+          
+          // Обновляем счётчик в карточке проживания
+          prozhivanie.mesta_zanyaty = result.prozhivanie.mesta_zanyaty
+          prozhivanie.mesta_svobodnye = result.prozhivanie.mesta_svobodnye
+          
+          // Удаляем участника из списка доступных
+          this.availableParticipants = this.availableParticipants.filter(
+            p => p.id !== this.draggedParticipant.id
+          )
+          this.filteredAvailableParticipants = this.filteredAvailableParticipants.filter(
+            p => p.id !== this.draggedParticipant.id
+          )
+          
+          // Обновляем статистику
+          this.stats.accommodation++
+          
+          console.log('Участник успешно заселён')
+        } else {
+          alert('Ошибка: ' + (result.error || 'Неизвестная ошибка'))
+        }
+        
+      } catch (error) {
+        console.error('Ошибка заселения:', error)
+        console.error('Ответ сервера:', error.response?.data)
+        alert('Ошибка при заселении участника: ' + (error.response?.data?.error || error.message))
+      }
+      
+      this.draggedParticipant = null
     },
     
     // ========== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ==========
@@ -1044,9 +1051,9 @@ export default {
     
     formatTime(datetime) {
       if (!datetime) return ''
-      return new Date(datetime).toLocaleTimeString('ru-RU', { 
-        hour: '2-digit', 
-        minute: '2-digit' 
+      return new Date(datetime).toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
       })
     },
     
@@ -1101,7 +1108,6 @@ export default {
 </script>
 
 <style scoped>
-/* ... ваши стили без изменений ... */
 .conference-detail {
   max-width: 1400px;
   margin: 0 auto;
@@ -1509,9 +1515,7 @@ export default {
 .status-отклонен { background: #ffebee; color: #c62828; }
 .status-отложен { background: #f5f5f5; color: #616161; }
 
-/* В <style scoped> компонента KonferentsiyaDetail.vue */
-
-/* Карточка участника */
+/* Стили для drag-and-drop расселения */
 .participant-card {
   background: white;
   border: 1px solid #dee2e6;
@@ -1535,7 +1539,6 @@ export default {
   transform: scale(0.98);
 }
 
-/* Карточка проживания */
 .accommodation-card {
   background: white;
   transition: all 0.2s ease;
@@ -1553,22 +1556,18 @@ export default {
   transform: scale(1.02);
 }
 
-/* Прогресс-бар */
 .progress-bar.bg-low { background: #27ae60 !important; }
 .progress-bar.bg-medium { background: #f39c12 !important; }
 .progress-bar.bg-high { background: #e74c3c !important; }
 
-/* Список участников */
 .participants-list {
   background: #f8f9fa;
 }
 
-/* Список проживаний */
 .accommodations-list {
   background: #fff;
 }
 
-/* Адаптивность */
 @media (max-width: 992px) {
   .modal-fullscreen-lg-down .modal-dialog {
     max-width: 100%;
@@ -1580,5 +1579,4 @@ export default {
     height: 100vh;
   }
 }
-
 </style>

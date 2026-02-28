@@ -102,7 +102,7 @@ class Prozhivanie(models.Model):
         if self.mesta_zanyaty > self.vmestimost:
             self.mesta_zanyaty = self.vmestimost
         
-        self.mesta_svobodnye = max(0, self.vmestimost - self.mesta_zanyaty)
+        self.mesta_svobodnye = self.get_free_places()
         super().save(*args, **kwargs)
     
     @property
@@ -119,12 +119,6 @@ class Prozhivanie(models.Model):
     def get_free_places(self):
         """Возвращает количество свободных мест"""
         return max(0, self.vmestimost - self.mesta_zanyaty)
-    
-    def save(self, *args, **kwargs):
-        # Авто-пересчёт свободных мест при сохранении
-        self.mesta_zanyaty = min(self.mesta_zanyaty, self.vmestimost)
-        self.mesta_svobodnye = max(0, self.vmestimost - self.mesta_zanyaty)
-        super().save(*args, **kwargs)
 
 
 class Transfer(models.Model):
@@ -162,12 +156,12 @@ class Transfer(models.Model):
         return f"{self.tip_transfera} — {self.mesto_vstrechi}"
 
     def save(self, *args, **kwargs):
-        # ✅ Защита от отрицательных значений и переполнения
+
         self.mesta_zanyaty = max(0, self.mesta_zanyaty)
         if self.mesta_zanyaty > self.vmestimost:
             self.mesta_zanyaty = self.vmestimost
         
-        # ✅ Автоматический пересчёт свободных мест
+
         self.mesta_svobodnye = max(0, self.vmestimost - self.mesta_zanyaty)
         super().save(*args, **kwargs)
     
@@ -246,7 +240,6 @@ class Uchastnik(models.Model):
     def doklady_count(self):
         return self.doklad_set.count()
     
-    # ✅ Добавлено свойство для проверки заселения
     @property
     def has_prozhivanie(self):
         """Проверяет, заселен ли участник"""
@@ -269,17 +262,15 @@ class UchastnikProzhivanie(models.Model):
     def __str__(self):
         return f"{self.uchastnik} ↔ {self.prozhivanie}"
 
-    # ✅ Исправленная версия с транзакцией и валидацией ДО сохранения
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         old_prozhivanie = None
         
-        # ✅ Получаем старое проживание ДО сохранения (для переселения)
+
         if not is_new:
             old_instance = UchastnikProzhivanie.objects.get(pk=self.pk)
             old_prozhivanie = old_instance.prozhivanie
-        
-        # ✅ ПРОВЕРКА ДО сохранения (критически важно!)
+
         if is_new:
             if self.prozhivanie.mesta_zanyaty >= self.prozhivanie.vmestimost:
                 raise ValidationError(
@@ -293,11 +284,10 @@ class UchastnikProzhivanie(models.Model):
                 raise ValidationError(
                     f"Невозможно переселить: в {self.prozhivanie.nazvanie} нет мест."
                 )
-        
-        # ✅ Сохраняем объект
+
         super().save(*args, **kwargs)
         
-        # ✅ Обновляем счётчики в транзакции
+
         with transaction.atomic():
             if is_new:
                 # Новое заселение
@@ -312,7 +302,7 @@ class UchastnikProzhivanie(models.Model):
                 self.prozhivanie.save()
 
     def delete(self, *args, **kwargs):
-        # ✅ Сохраняем ссылку на проживание ДО удаления
+
         prozhivanie = self.prozhivanie
         
         with transaction.atomic():
