@@ -738,6 +738,15 @@ class SettlementViewSet(viewsets.ViewSet):
             category = proj.kategoriya_nomerov or 'Стандарт'
             if category not in result[turbaza]['categories']:
                 result[turbaza]['categories'][category] = []
+
+            zaselennye = UchastnikProzhivanie.objects.filter(prozhivanie=proj).select_related('uchastnik')
+            zaselennye_list = [
+                {
+                    'id': z.uchastnik.id,
+                    'fio': f"{z.uchastnik.familiya} {z.uchastnik.name[0]}."
+                }
+                for z in zaselennye
+            ]
             
             result[turbaza]['categories'][category].append({
                 'id': proj.id,
@@ -746,7 +755,8 @@ class SettlementViewSet(viewsets.ViewSet):
                 'mesta_zanyaty': proj.mesta_zanyaty,
                 'mesta_svobodnye': max(0, proj.vmestimost - proj.mesta_zanyaty),
                 'stoimost': str(proj.stoimost),
-                'kolvo_domikov': proj.kolvo_domikov
+                'kolvo_domikov': proj.kolvo_domikov,
+                'zaselennye': zaselennye_list
             })
         
         return Response(result)
@@ -779,8 +789,7 @@ class SettlementViewSet(viewsets.ViewSet):
                 prozhivanie=prozhivanie,
             )
             
-            prozhivanie.mesta_zanyaty += 1
-            prozhivanie.save()
+            prozhivanie.refresh_from_db()
             
             return Response({
                 'success': True,
@@ -815,14 +824,19 @@ class SettlementViewSet(viewsets.ViewSet):
                 )
             
             prozhivanie = svyaz.prozhivanie
+
             svyaz.delete()
             
-            prozhivanie.mesta_zanyaty = max(0, prozhivanie.mesta_zanyaty - 1)
-            prozhivanie.save()
+            prozhivanie.refresh_from_db()
             
             return Response({
                 'success': True,
-                'message': f'{uchastnik.familiya} {uchastnik.name} выселен'
+                'message': f'{uchastnik.familiya} {uchastnik.name} выселен',
+                'prozhivanie': {
+                    'id': prozhivanie.id,
+                    'mesta_zanyaty': prozhivanie.mesta_zanyaty,
+                    'mesta_svobodnye': prozhivanie.vmestimost - prozhivanie.mesta_zanyaty
+                }
             })
             
         except Uchastnik.DoesNotExist:

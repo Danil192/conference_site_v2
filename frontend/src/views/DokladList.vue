@@ -46,6 +46,7 @@
             <th>Конференция</th>
             <th>Секция</th>
             <th>Статус</th>
+            <th>Файл</th>
             <th>Дата подачи</th>
             <th class="text-end">Действия</th>
           </tr>
@@ -66,6 +67,19 @@
                 {{ getStatusLabel(item.status_doklada) }}
               </span>
             </td>
+            <td>
+              <a 
+                v-if="item.file_url" 
+                :href="item.file_url" 
+                target="_blank"
+                class="btn btn-sm btn-outline-success"
+                title="Скачать файл"
+              >
+                <i class="bi bi-download"></i>
+              </a>
+              <span v-else class="text-muted small">—</span>
+            </td>
+            
             <td>{{ formatDate(item.data_podachi) }}</td>
             <td class="text-end">
               <button class="btn btn-sm btn-outline-primary me-1" @click="editItem(item)">
@@ -77,7 +91,7 @@
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="7" class="text-center text-muted py-4">
+            <td colspan="8" class="text-center text-muted py-4">  
               Нет данных
             </td>
           </tr>

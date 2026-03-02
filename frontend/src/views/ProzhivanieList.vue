@@ -90,6 +90,20 @@
                 <label class="form-label">Турбаза</label>
                 <input type="text" class="form-control" v-model="form.turbaza_nazvanie">
               </div>
+              
+              <div class="mb-3">
+                <label class="form-label">Конференция *</label>
+                <select class="form-select" v-model="form.konferentsiya" required>
+                  <option value="" disabled>Выберите конференцию</option>
+                  <option v-for="konf in konferentsiyas" :key="konf.id" :value="konf.id">
+                    {{ konf.nazvanie }}
+                  </option>
+                </select>
+                <div class="form-text">
+                  К какой конференции относится этот номерной фонд
+                </div>
+              </div>
+              
               <div class="row">
                 <div class="col-md-6 mb-3">
                   <label class="form-label">Категория номеров</label>
@@ -123,7 +137,7 @@
 </template>
 
 <script>
-import { prozhivanieAPI } from '../services/api'
+import { prozhivanieAPI, konferentsiyaAPI } from '../services/api'
 import { Modal } from 'bootstrap'
 
 export default {
@@ -131,12 +145,14 @@ export default {
   data() {
     return {
       items: [],
+      konferentsiyas: [], 
       searchQuery: '',
       kategoriyaFilter: '',
       form: {
         id: null,
         nazvanie: '',
         turbaza_nazvanie: '',
+        konferentsiya: null, 
         kategoriya_nomerov: '',
         stoimost: 0,
         vmestimost: 1,
@@ -149,8 +165,18 @@ export default {
   mounted() {
     this.modal = new Modal(this.$refs.modalRef)
     this.fetchData()
+    this.loadKonferentsiyas() 
   },
   methods: {
+    async loadKonferentsiyas() {
+      try {
+        const response = await konferentsiyaAPI.getAll()
+        this.konferentsiyas = response.data.results || response.data
+      } catch (error) {
+        console.error('Ошибка загрузки конференций:', error)
+      }
+    },
+
     async fetchData() {
       try {
         const response = await prozhivanieAPI.getAll()
@@ -170,7 +196,8 @@ export default {
         alert('Не удалось загрузить данные')
       }
     },
-    openModal(item = null) {
+
+openModal(item = null) {
       this.isEdit = !!item
       if (item) {
         this.form = { ...item }
@@ -179,6 +206,7 @@ export default {
           id: null,
           nazvanie: '',
           turbaza_nazvanie: '',
+          konferentsiya: null, 
           kategoriya_nomerov: '',
           stoimost: 0,
           vmestimost: 1,
@@ -187,6 +215,7 @@ export default {
       }
       this.modal.show()
     },
+
     closeModal() {
       this.modal.hide()
     },

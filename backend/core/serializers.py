@@ -110,6 +110,7 @@ class UchastnikSerializer(serializers.ModelSerializer):
     sektsiya_nazvanie = serializers.CharField(source='sektsiya.nazvanie', read_only=True)
     tarif_nazvanie = serializers.CharField(source='tarif.nazvanie', read_only=True)
     has_prozhivanie = serializers.SerializerMethodField()
+    prozhivanie_nazvanie = serializers.SerializerMethodField()
     
     class Meta:
         model = Uchastnik
@@ -120,7 +121,7 @@ class UchastnikSerializer(serializers.ModelSerializer):
             'kommentarii', 'konferentsiya', 'konferentsiya_nazvanie',
             'nuzhen_transfer', 'tarif', 'tarif_nazvanie', 'oplata_polnaya',
             'nuzhen_prozhivanie', 'tip_prozhivaniya', 'preferencii',
-            'data_zaseleniya', 'data_vyseleniya', 'has_prozhivanie',
+            'data_zaseleniya', 'data_vyseleniya', 'has_prozhivanie', 'prozhivanie_nazvanie',
             'created_at', 'updated_at'
         ]
         read_only_fields = ('created_at', 'updated_at')
@@ -128,6 +129,12 @@ class UchastnikSerializer(serializers.ModelSerializer):
     def get_has_prozhivanie(self, obj):
         """Проверяет, заселен ли участник"""
         return UchastnikProzhivanie.objects.filter(uchastnik=obj).exists()
+    
+    def get_prozhivanie_nazvanie(self, obj):
+        svyaz = UchastnikProzhivanie.objects.filter(uchastnik=obj).first()
+        if svyaz:
+            return svyaz.prozhivanie.nazvanie
+        return None
 
 
 # ========== СВЯЗЬ УЧАСТНИК-ПРОЖИВАНИЕ ==========
@@ -187,7 +194,6 @@ class ProgrammaSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ('created_at', 'updated_at')
 
-
 class ProgramSerializer(serializers.ModelSerializer):
     """Сериализатор контейнера программы"""
     konferentsiya_nazvanie = serializers.CharField(source='konferentsiya.nazvanie', read_only=True)
@@ -200,12 +206,13 @@ class ProgramSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ('data_sozdaniya',)
 
-
 # ========== ДОКЛАДЫ ==========
 class DokladSerializer(serializers.ModelSerializer):
     uchastnik_fio = serializers.CharField(source='uchastnik', read_only=True)
     konferentsiya_nazvanie = serializers.CharField(source='konferentsiya.nazvanie', read_only=True)
     sektsiya_nazvanie = serializers.CharField(source='sektsiya.nazvanie', read_only=True)
+    
+    file_url = serializers.SerializerMethodField()
     
     class Meta:
         model = Doklad
@@ -213,13 +220,13 @@ class DokladSerializer(serializers.ModelSerializer):
             'id', 'nazvanie', 'status_doklada', 'data_podachi',
             'uchastnik', 'uchastnik_fio', 'konferentsiya', 'konferentsiya_nazvanie',
             'sektsiya', 'sektsiya_nazvanie',
-            'vystupaet',
+            'vystupaet', 'file', 'file_url', 
             'created_at', 'updated_at'
         ]
         read_only_fields = ('created_at', 'updated_at', 'data_podachi')
     
     def get_file_url(self, obj):
-        """Возвращает полный URL для файла"""
+        """Возвращает полный URL для скачивания файла"""
         if obj.file:
             request = self.context.get('request')
             if request:

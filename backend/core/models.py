@@ -341,7 +341,6 @@ class Doklad(models.Model):
     uchastnik = models.ForeignKey(Uchastnik, on_delete=models.CASCADE)
     konferentsiya = models.ForeignKey(Konferentsiya, on_delete=models.CASCADE)
     vystupaet = models.BooleanField(default=True)
-    
     sektsiya = models.ForeignKey(
         'Sekciya', 
         on_delete=models.SET_NULL, 
@@ -349,6 +348,15 @@ class Doklad(models.Model):
         blank=True,
         verbose_name='Секция'
     )
+
+    file = models.FileField(
+        upload_to='doklads/%Y/%m/',
+        blank=True,
+        null=True,
+        verbose_name='Файл доклада',
+        help_text='PDF, DOC, DOCX, PPT, PPTX (макс. 10MB)'
+    )
+    
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

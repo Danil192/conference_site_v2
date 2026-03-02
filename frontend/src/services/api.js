@@ -62,40 +62,41 @@ export const transferAPI = {
 
 // Доклады
 export const dokladAPI = {
-  getAll: () => api.get('/doklads/'),
+  getAll: () => api.get('/doklads/'),  // Django REST автоматически добавит request в context
+  
   getById: (id) => api.get(`/doklads/${id}/`),
-  // Для создания/обновления с файлом используем FormData
+  
   create: (data, file = null) => {
-    if (file) {
-      const formData = new FormData()
-      Object.keys(data).forEach(key => {
+    const formData = new FormData()
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
         formData.append(key, data[key])
-      })
+      }
+    })
+    if (file) {
       formData.append('file', file)
-      return api.post('/doklads/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      })
     }
-    return api.post('/doklads/', data)
+    return api.post('/doklads/', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
   },
+  
   update: (id, data, file = null) => {
-    if (file) {
-      const formData = new FormData()
-      Object.keys(data).forEach(key => {
+    const formData = new FormData()
+    Object.keys(data).forEach(key => {
+      if (data[key] !== null && data[key] !== undefined) {
         formData.append(key, data[key])
-      })
+      }
+    })
+    if (file) {
       formData.append('file', file)
-      return api.put(`/doklads/${id}/`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      })
     }
-    return api.put(`/doklads/${id}/`, data)
+    return api.patch(`/doklads/${id}/`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
   },
-  delete: (id) => api.delete(`/doklads/${id}/`),
+  
+  delete: (id) => api.delete(`/doklads/${id}/`)
 }
 
 // Отказы
