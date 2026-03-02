@@ -106,6 +106,25 @@ class Prozhivanie(models.Model):
         super().save(*args, **kwargs)
     
     @property
+    def obshaya_vmestimost(self):
+        """Считает общую вместимость (вместимость 1 шт * количество)"""
+        if self.kolvo_domikov and self.kolvo_domikov > 0:
+            return self.vmestimost * self.kolvo_domikov
+        return self.vmestimost
+
+    def save(self, *args, **kwargs):
+        self.mesta_zanyaty = max(0, self.mesta_zanyaty)
+        
+        total_limit = self.obshaya_vmestimost
+        
+        if self.mesta_zanyaty > total_limit:
+            self.mesta_zanyaty = total_limit
+        
+        self.mesta_svobodnye = max(0, total_limit - self.mesta_zanyaty)
+        super().save(*args, **kwargs)
+        
+
+    @property
     def procent_zanyatosti(self):
         """Процент заполненности"""
         if self.vmestimost == 0:
@@ -265,36 +284,31 @@ class UchastnikProzhivanie(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
         old_prozhivanie = None
-        
 
         if not is_new:
             old_instance = UchastnikProzhivanie.objects.get(pk=self.pk)
             old_prozhivanie = old_instance.prozhivanie
 
         if is_new:
-            if self.prozhivanie.mesta_zanyaty >= self.prozhivanie.vmestimost:
+            if self.prozhivanie.mesta_zanyaty >= self.prozhivanie.obshaya_vmestimost:
                 raise ValidationError(
                     f"Нет свободных мест в {self.prozhivanie.nazvanie}. "
                     f"Занято: {self.prozhivanie.mesta_zanyaty}, "
-                    f"Вместимость: {self.prozhivanie.vmestimost}"
+                    f"Всего мест: {self.prozhivanie.obshaya_vmestimost}"
                 )
         elif old_prozhivanie and old_prozhivanie.id != self.prozhivanie.id:
-            # Переселение: проверяем новое место
-            if self.prozhivanie.mesta_zanyaty >= self.prozhivanie.vmestimost:
+            if self.prozhivanie.mesta_zanyaty >= self.prozhivanie.obshaya_vmestimost:
                 raise ValidationError(
                     f"Невозможно переселить: в {self.prozhivanie.nazvanie} нет мест."
                 )
 
         super().save(*args, **kwargs)
-        
 
         with transaction.atomic():
             if is_new:
-                # Новое заселение
                 self.prozhivanie.mesta_zanyaty += 1
                 self.prozhivanie.save()
             elif old_prozhivanie and old_prozhivanie.id != self.prozhivanie.id:
-                # Переселение
                 old_prozhivanie.mesta_zanyaty = max(0, old_prozhivanie.mesta_zanyaty - 1)
                 old_prozhivanie.save()
                 

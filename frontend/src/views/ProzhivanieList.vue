@@ -32,12 +32,14 @@
 
     <div class="table-container">
       <table class="table table-hover">
-        <thead>
+<thead>
           <tr>
             <th>Название</th>
             <th>Турбаза</th>
             <th>Категория</th>
-            <th>Вместимость</th>
+            <th>Вмест. 1 шт.</th>
+            <th>Кол-во шт.</th>  
+            <th>Всего мест</th>  
             <th>Стоимость</th>
             <th>Занято/Свободно</th>
             <th class="text-end">Действия</th>
@@ -48,7 +50,9 @@
             <td>{{ item.nazvanie }}</td>
             <td>{{ item.turbaza_nazvanie || '—' }}</td>
             <td>{{ item.kategoriya_nomerov || '—' }}</td>
-            <td>{{ item.vmestimost }}</td>
+            <td>{{ item.vmestimost }} чел.</td> 
+            <td>{{ item.kolvo_domikov || 1 }} шт.</td>
+            <td><strong>{{ item.obshaya_vmestimost }}</strong></td>
             <td>{{ item.stoimost }} ₽</td>
             <td>
               <span class="badge" :class="item.mesta_svobodnye > 0 ? 'bg-success' : 'bg-danger'">

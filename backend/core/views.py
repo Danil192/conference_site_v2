@@ -586,6 +586,14 @@ class ZaselenieViewSet(viewsets.ViewSet):
                     {'error': 'Участник уже заселен'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+            free_places = prozhivanie.obshaya_vmestimost - prozhivanie.mesta_zanyaty
+            
+            if free_places <= 0:
+                return Response(
+                    {'error': 'Нет свободных мест'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
             # Создаём связь
             UchastnikProzhivanie.objects.create(
@@ -751,9 +759,9 @@ class SettlementViewSet(viewsets.ViewSet):
             result[turbaza]['categories'][category].append({
                 'id': proj.id,
                 'nazvanie': proj.nazvanie,
-                'vmestimost': proj.vmestimost,
+                'vmestimost': proj.obshaya_vmestimost,
                 'mesta_zanyaty': proj.mesta_zanyaty,
-                'mesta_svobodnye': max(0, proj.vmestimost - proj.mesta_zanyaty),
+                'mesta_svobodnye': max(0, proj.obshaya_vmestimost - proj.mesta_zanyaty),
                 'stoimost': str(proj.stoimost),
                 'kolvo_domikov': proj.kolvo_domikov,
                 'zaselennye': zaselennye_list
@@ -763,50 +771,55 @@ class SettlementViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['post'])
     def settle(self, request):
-        """Заселить участника в проживание"""
-        uchastnik_id = request.data.get('uchastnik_id')
-        prozhivanie_id = request.data.get('prozhivanie_id')
-        
-        try:
-            uchastnik = Uchastnik.objects.get(id=uchastnik_id)
-            prozhivanie = Prozhivanie.objects.get(id=prozhivanie_id)
+            """Заселить участника в проживание"""
+            uchastnik_id = request.data.get('uchastnik_id')
+            prozhivanie_id = request.data.get('prozhivanie_id')
             
-            if UchastnikProzhivanie.objects.filter(uchastnik=uchastnik).exists():
-                return Response(
-                    {'error': 'Участник уже заселен'},
-                    status=status.HTTP_400_BAD_REQUEST
+            try:
+                uchastnik = Uchastnik.objects.get(id=uchastnik_id)
+                prozhivanie = Prozhivanie.objects.get(id=prozhivanie_id)
+                
+                if UchastnikProzhivanie.objects.filter(uchastnik=uchastnik).exists():
+                    return Response(
+                        {'error': 'Участник уже заселен'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # --- ИСПРАВЛЕНИЕ ЗДЕСЬ ---
+                # Используем obshaya_vmestimost вместо vmestimost
+                free_places = prozhivanie.obshaya_vmestimost - prozhivanie.mesta_zanyaty
+                
+                if free_places <= 0:
+                    return Response(
+                        {'error': 'Нет свободных мест'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                # -------------------------
+                
+                UchastnikProzhivanie.objects.create(
+                    uchastnik=uchastnik,
+                    prozhivanie=prozhivanie,
                 )
-            
-            free_places = prozhivanie.vmestimost - prozhivanie.mesta_zanyaty
-            if free_places <= 0:
-                return Response(
-                    {'error': 'Нет свободных мест'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            UchastnikProzhivanie.objects.create(
-                uchastnik=uchastnik,
-                prozhivanie=prozhivanie,
-            )
-            
-            prozhivanie.refresh_from_db()
-            
-            return Response({
-                'success': True,
-                'message': f'{uchastnik.familiya} {uchastnik.name} заселён в {prozhivanie.nazvanie}',
-                'prozhivanie': {
-                    'id': prozhivanie.id,
-                    'mesta_zanyaty': prozhivanie.mesta_zanyaty,
-                    'mesta_svobodnye': prozhivanie.vmestimost - prozhivanie.mesta_zanyaty
-                }
-            })
-            
-        except Uchastnik.DoesNotExist:
-            return Response({'error': 'Участник не найден'}, status=404)
-        except Prozhivanie.DoesNotExist:
-            return Response({'error': 'Проживание не найдено'}, status=404)
-        except Exception as e:
-            return Response({'error': str(e)}, status=400)
+                
+                prozhivanie.refresh_from_db()
+                
+                return Response({
+                    'success': True,
+                    'message': f'{uchastnik.familiya} {uchastnik.name} заселён в {prozhivanie.nazvanie}',
+                    'prozhivanie': {
+                        'id': prozhivanie.id,
+                        'mesta_zanyaty': prozhivanie.mesta_zanyaty,
+                        # Тут тоже на всякий случай поправь расчет для ответа фронтенду:
+                        'mesta_svobodnye': prozhivanie.obshaya_vmestimost - prozhivanie.mesta_zanyaty
+                    }
+                })
+                
+            except Uchastnik.DoesNotExist:
+                return Response({'error': 'Участник не найден'}, status=404)
+            except Prozhivanie.DoesNotExist:
+                return Response({'error': 'Проживание не найдено'}, status=404)
+            except Exception as e:
+                return Response({'error': str(e)}, status=400)
 
     @action(detail=False, methods=['post'])
     def vacate(self, request):

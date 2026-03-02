@@ -54,6 +54,7 @@ class ProzhivanieSerializer(serializers.ModelSerializer):
     """Сериализатор проживания с расчётом заполненности"""
     konferentsiya_nazvanie = serializers.CharField(source='konferentsiya.nazvanie', read_only=True)
     procent_zanyatosti = serializers.SerializerMethodField()
+    obshaya_vmestimost = serializers.ReadOnlyField()
     
     class Meta:
         model = Prozhivanie
@@ -62,6 +63,7 @@ class ProzhivanieSerializer(serializers.ModelSerializer):
             'vmestimost', 'mesta_zanyaty', 'mesta_svobodnye',
             'turbaza_nazvanie', 'kolvo_domikov', 'konferentsiya',
             'konferentsiya_nazvanie', 'procent_zanyatosti',
+            'obshaya_vmestimost',
             'created_at', 'updated_at'
         ]
         read_only_fields = ('created_at', 'updated_at', 'mesta_zanyaty', 'mesta_svobodnye')
@@ -144,6 +146,7 @@ class UchastnikProzhivanieSerializer(serializers.ModelSerializer):
     uchastnik_email = serializers.CharField(source='uchastnik.email', read_only=True)
     prozhivanie_nazvanie = serializers.CharField(source='prozhivanie.nazvanie', read_only=True)
     prozhivanie_tip = serializers.CharField(source='prozhivanie.kategoriya_nomerov', read_only=True)
+    
     
     class Meta:
         model = UchastnikProzhivanie
