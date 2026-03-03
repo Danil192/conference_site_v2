@@ -144,21 +144,25 @@ export default {
 }
 </script>
 
-<style>
-/* Глобальные настройки */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
+<style scoped>
+/* ==========================================
+   ОСНОВНАЯ СТРУКТУРА
+========================================== */
 #app {
   display: flex;
   min-height: 100vh;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Сайдбар */
+.main-content {
+  margin-left: 260px;
+  flex: 1;
+  padding: 30px;
+  min-height: 100vh;
+}
+
+/* ==========================================
+   САЙДБАР (SIDEBAR)
+========================================== */
 .sidebar {
   width: 260px;
   background: linear-gradient(180deg, #2c3e50 0%, #1a252f 100%);
@@ -173,7 +177,7 @@ export default {
 
 .sidebar-header {
   padding: 0 20px 20px;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
   margin-bottom: 10px;
 }
 
@@ -181,35 +185,39 @@ export default {
   font-size: 18px;
   font-weight: 600;
   margin-bottom: 5px;
+  color: white;
 }
 
 .subtitle {
   font-size: 12px;
-  color: rgba(255,255,255,0.6);
+  color: rgba(255,255,255,0.5);
+  margin-bottom: 0;
 }
 
-/* Блок авторизации */
+/* ==========================================
+   БЛОК АВТОРИЗАЦИИ
+========================================== */
 .auth-wrapper {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 10px;
-  padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .admin-link {
   display: block;
   padding: 10px 15px;
-  background: rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
   color: rgba(255,255,255,0.8);
   text-decoration: none;
-  border-radius: 5px;
+  border-radius: 6px;
   font-size: 13px;
   transition: all 0.3s ease;
-  border: 1px solid rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 .admin-link:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.15);
   color: white;
 }
 
@@ -217,9 +225,10 @@ export default {
   display: block;
   text-align: center;
   font-size: 11px;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255,255,255,0.4);
   text-decoration: none;
-  margin-top: 5px;
+  margin-top: 10px;
+  transition: color 0.3s ease;
 }
 
 .register-link:hover {
@@ -231,8 +240,8 @@ export default {
 }
 
 .avatar-circle {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   background: rgba(52, 152, 219, 0.2);
   border-radius: 50%;
   display: flex;
@@ -243,7 +252,7 @@ export default {
 }
 
 .user-name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -251,6 +260,7 @@ export default {
   font-size: 10px;
   color: #2ecc71;
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .btn-logout {
@@ -258,10 +268,12 @@ export default {
   background: rgba(231, 76, 60, 0.1);
   border: 1px solid rgba(231, 76, 60, 0.2);
   color: #e74c3c;
-  font-size: 11px;
-  padding: 5px;
-  border-radius: 5px;
+  font-size: 12px;
+  padding: 8px;
+  border-radius: 6px;
   cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 15px;
 }
 
 .btn-logout:hover {
@@ -269,10 +281,13 @@ export default {
   color: white;
 }
 
-/* --- ВОЗВРАЩЕННЫЕ СТИЛИ НАВИГАЦИИ --- */
+/* ==========================================
+   НАВИГАЦИЯ (ОРИГИНАЛ)
+========================================== */
 .nav-list {
   list-style: none;
   padding: 0;
+  margin: 0;
 }
 
 .nav-section {
@@ -292,33 +307,28 @@ export default {
   text-decoration: none;
   transition: all 0.3s ease;
   cursor: pointer;
-}
-
-.nav-link:hover {
-  background: rgba(255,255,255,0.1);
-  color: white;
-}
-
-/* Тот самый красивый активный стиль */
-.nav-link.router-link-active {
-  background: #3498db;
-  color: white;
+  font-size: 14px;
 }
 
 .nav-link i {
   margin-right: 12px;
   font-size: 16px;
+  width: 20px;
+  text-align: center;
 }
 
-/* Основной контент */
-.main-content {
-  margin-left: 260px;
-  flex: 1;
-  padding: 30px;
-  background: #f5f6fa;
-  min-height: 100vh;
+.nav-link:hover {
+  background: rgba(255,255,255,0.05);
+  color: white;
 }
 
+.nav-link.router-link-active {
+  background-color: #3498db !important;
+  color: white !important;
+  border-left: 3px solid transparent; /* Убирает дергание, если рамка была */
+}
+
+/* Адаптивность */
 @media (max-width: 768px) {
   .sidebar { width: 200px; }
   .main-content { margin-left: 200px; }
