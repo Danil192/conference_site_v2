@@ -134,6 +134,12 @@
         <!-- Вкладка: Участники -->
         <div class="tab-pane fade show active" id="participants-tab">
           <div class="tab-header">
+              <div class="d-flex align-items-center gap-3">
+                <div class="input-group input-group-sm" style="width: 300px;">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" class="form-control" v-model="participantTabSearch" placeholder="Поиск по ФИО или Email...">
+              </div>
+              </div>
             <h5><i class="bi bi-people"></i> Участники конференции</h5>
             <div class="header-actions">
               <button class="btn btn-sm btn-success me-2" @click="addParticipantToConference()">
@@ -156,11 +162,12 @@
                   <th>Статус</th>
                   <th>Секция</th>
                   <th>Проживание</th>
+                  <th>Трансфер</th>
                   <th class="text-end">Действия</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="p in participants" :key="p.id">
+                <tr v-for="p in filteredParticipantsTab" :key="p.id">
                   <td><strong>{{ p.familiya }} {{ p.name }} {{ p.otchestvo }}</strong></td>
                   <td>{{ p.email }}</td>
                   <td>{{ p.organizatsiya }}</td>
@@ -176,6 +183,13 @@
                       <i class="bi bi-house-door"></i> {{ p.prozhivanie_nazvanie }}
                     </span>
                     <span v-else class="badge bg-secondary">Не заселен</span>
+                  </td>
+                  <td>
+                    <span v-if="p.transfer_info" class="badge bg-info text-dark">
+                      <i class="bi bi-bus-front"></i> {{ p.transfer_info }}
+                    </span>
+                    <span v-else-if="p.nuzhen_transfer" class="badge bg-warning text-dark">Ждет</span>
+                    <span v-else class="text-muted small">—</span>
                   </td>
                   <td class="text-end">
                     <button class="btn btn-sm btn-outline-primary" @click="editParticipant(p)">
@@ -416,7 +430,7 @@
             <!-- Трансфер -->
             <div class="logistics-card">
               <div class="logistics-header">
-                <i class="bi bi-bus-front"></i>
+                
                 <h5>Трансфер</h5>
               </div>
               <div class="logistics-stats">
@@ -851,7 +865,17 @@ export default {
       return [...this.programItems].sort((a, b) => 
         new Date(a.vremya_nachala) - new Date(b.vremya_nachala)
       )
+    },
+    filteredParticipantsTab() {
+        if (!this.participantTabSearch) return this.participants;
+        const search = this.participantTabSearch.toLowerCase();
+        return this.participants.filter(p => 
+            p.familiya.toLowerCase().includes(search) ||
+            p.name.toLowerCase().includes(search) ||
+            p.email.toLowerCase().includes(search)
+        );
     }
+
   },
   
   mounted() {
@@ -1216,7 +1240,7 @@ async onDrop(event, prozhivanie) {
     },
     
     async loadTransferDistributionData() {
-      try {
+try {
         const participantsResponse = await uchastnikAPI.getAll()
         const allParticipants = participantsResponse.data.results || participantsResponse.data
         
@@ -1224,22 +1248,39 @@ async onDrop(event, prozhivanie) {
           p.konferentsiya == this.conferenceId
         )
         
-        const assignedResponse = await axios.get(
-          'settlement/transfers/assigned/',
-          { params: { konferentsiya: this.conferenceId } }
-        )
-        const assignedIds = assignedResponse.data.map(a => a.uchastnik_id)
+        const assignedResponse = await settlementAPI.getTransfersAssigned(this.conferenceId)
         
+        const assignedList = assignedResponse.data.results || assignedResponse.data || []
+        
+        if (!Array.isArray(assignedList)) {
+            console.error('Ошибка формата данных (assignedList):', assignedList)
+            alert('Ошибка: сервер вернул некорректные данные о назначенных трансферах')
+            return
+        }
+        // --------------------------------------------------------
+
+        const assignedIds = assignedList.map(a => a.uchastnik_id)
+        
+        this.assignedTransferParticipants = {}
+        assignedList.forEach(a => {
+           if (!this.assignedTransferParticipants[a.transfer_id]) {
+               this.assignedTransferParticipants[a.transfer_id] = []
+           }
+           this.assignedTransferParticipants[a.transfer_id].push({ 
+               id: a.uchastnik_id, 
+               familiya: a.uchastnik_fio.split(' ')[0], 
+               name: a.uchastnik_fio.split(' ')[1] || '' 
+           })
+        })
+
         this.availableTransferParticipants = conferenceParticipants.filter(p => 
           !assignedIds.includes(p.id)
         )
         this.filteredTransferParticipants = [...this.availableTransferParticipants]
         
-        const transfersResponse = await axios.get(
-          'settlement/transfers_available/',
-          { params: { konferentsiya: this.conferenceId } }
-        )
-        this.availableTransfers = transfersResponse.data
+        const transfersResponse = await settlementAPI.getTransfersAvailable(this.conferenceId)
+        
+        this.availableTransfers = transfersResponse.data.results || transfersResponse.data || []
         this.filteredTransfers = [...this.availableTransfers]
         
       } catch (error) {
@@ -1327,42 +1368,41 @@ async onDrop(event, prozhivanie) {
       const cards = document.querySelectorAll('.transfer-card')
       cards.forEach(card => card.classList.remove('drag-over'))
       
-      if (!this.draggedTransferParticipant) return
+      const participant = this.draggedTransferParticipant
+      
+      if (!participant) return
+      
       if (transfer.mesta_svobodnye <= 0) {
         alert('В этом трансфере нет свободных мест!')
         return
       }
       
-      const confirmMsg = `Назначить ${this.draggedTransferParticipant.familiya} ${this.draggedTransferParticipant.name} на ${transfer.tip_transfera} (${transfer.mesto_vstrechi})?`
+      const confirmMsg = `Назначить ${participant.familiya} ${participant.name} на ${transfer.tip_transfera} (${transfer.mesto_vstrechi})?`
       if (!confirm(confirmMsg)) return
       
       try {
-        const response = await axios.post(
-          'settlement/assign_transfer/',
-          {
-            uchastnik_id: this.draggedTransferParticipant.id,
-            transfer_id: transfer.id
-          }
-        )
+        const response = await settlementAPI.assignTransfer({
+          uchastnik_id: participant.id, 
+          transfer_id: transfer.id
+        })
         
         const result = response.data
         
         if (result.success) {
-          alert(result.message)
           transfer.mesta_zanyaty = result.transfer.mesta_zanyaty
           transfer.mesta_svobodnye = result.transfer.mesta_svobodnye
           
           this.availableTransferParticipants = this.availableTransferParticipants.filter(
-            p => p.id !== this.draggedTransferParticipant.id
+            p => p.id !== participant.id
           )
           this.filteredTransferParticipants = this.filteredTransferParticipants.filter(
-            p => p.id !== this.draggedTransferParticipant.id
+            p => p.id !== participant.id
           )
           
           if (!this.assignedTransferParticipants[transfer.id]) {
-            this.$set(this.assignedTransferParticipants, transfer.id, [])
+            this.assignedTransferParticipants[transfer.id] = [] // Используем обычное присваивание Vue 3
           }
-          this.assignedTransferParticipants[transfer.id].push(this.draggedTransferParticipant)
+          this.assignedTransferParticipants[transfer.id].push(participant)
           
           this.stats.transfers++
         } else {
@@ -1372,6 +1412,7 @@ async onDrop(event, prozhivanie) {
         console.error('Ошибка назначения на трансфер:', error)
         alert('Ошибка при назначении участника на трансфер: ' + (error.response?.data?.error || error.message))
       }
+      
       this.draggedTransferParticipant = null
     },
     
@@ -1379,10 +1420,9 @@ async onDrop(event, prozhivanie) {
       if (!confirm('Снять участника с трансфера?')) return
       
       try {
-        const response = await axios.post(
-          'settlement/unassign_transfer/',
-          { uchastnik_id: participantId }
-        )
+        const response = await settlementAPI.unassignTransfer({ 
+            uchastnik_id: participantId 
+      })
         
         const result = response.data
         

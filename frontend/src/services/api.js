@@ -62,7 +62,7 @@ export const transferAPI = {
 
 // Доклады
 export const dokladAPI = {
-  getAll: () => api.get('/doklads/'),  // Django REST автоматически добавит request в context
+  getAll: () => api.get('/doklads/'),
   
   getById: (id) => api.get(`/doklads/${id}/`),
   
@@ -139,14 +139,22 @@ export const importAPI = {
   },
 }
 
-// Расселение
+// Расселение и Логистика
 export const settlementAPI = {
+  // Проживание
   getAvailable: (konferentsiyaId) => 
     api.get(`/settlement/available/?konferentsiya=${konferentsiyaId}`),
   getAccommodations: (konferentsiyaId) => 
     api.get(`/settlement/accommodations/?konferentsiya=${konferentsiyaId}`),
   settle: (data) => api.post('/settlement/settle/', data),
   vacate: (data) => api.post('/settlement/vacate/', data),
+
+  getTransfersAvailable: (konferentsiyaId) => 
+    api.get(`/settlement/transfers_available/?konferentsiya=${konferentsiyaId}`),
+  getTransfersAssigned: (konferentsiyaId) => 
+    api.get(`/settlement/transfers_assigned/?konferentsiya=${konferentsiyaId}`),
+  assignTransfer: (data) => api.post('/settlement/assign_transfer/', data),
+  unassignTransfer: (data) => api.post('/settlement/unassign_transfer/', data),
 }
 
 export default api

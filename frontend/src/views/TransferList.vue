@@ -36,7 +36,9 @@
           <tr>
             <th>Место встречи</th>
             <th>Тип трансфера</th>
-            <th>Вместимость</th>
+            <th>Вмест. 1 шт.</th>
+            <th>Кол-во</th>
+            <th>Всего мест</th>
             <th>Занято/Свободно</th>
             <th class="text-end">Действия</th>
           </tr>
@@ -50,6 +52,8 @@
               </span>
             </td>
             <td>{{ item.vmestimost }}</td>
+            <td>{{ item.kolvo_transporta || 1 }} шт.</td>
+            <td><strong>{{ item.obshaya_vmestimost }}</strong></td>
             <td>
               <span class="badge" :class="item.mesta_svobodnye > 0 ? 'bg-success' : 'bg-danger'">
                 {{ item.mesta_zanyaty }} / {{ item.mesta_svobodnye }}
@@ -65,7 +69,7 @@
             </td>
           </tr>
           <tr v-if="items.length === 0">
-            <td colspan="5" class="text-center text-muted py-4">
+            <td colspan="7" class="text-center text-muted py-4">
               Нет данных
             </td>
           </tr>
@@ -86,8 +90,20 @@
                 <label class="form-label">Место встречи *</label>
                 <input type="text" class="form-control" v-model="form.mesto_vstrechi" required>
               </div>
+              
+              <div class="mb-3">
+                <label class="form-label">Конференция</label>
+                <select class="form-select" v-model="form.konferentsiya">
+                  <option value="" disabled>Выберите конференцию</option>
+                  <option v-for="konf in konferentsiyas" :key="konf.id" :value="konf.id">
+                    {{ konf.nazvanie }}
+                  </option>
+                </select>
+                <div class="form-text">Привязка к конференции (необязательно)</div>
+              </div>
+
               <div class="row">
-                <div class="col-md-6 mb-3">
+                <div class="col-md-4 mb-3">
                   <label class="form-label">Тип трансфера *</label>
                   <select class="form-select" v-model="form.tip_transfera" required>
                     <option value="автобус">Автобус</option>
@@ -96,9 +112,13 @@
                     <option value="индивидуально">Индивидуально</option>
                   </select>
                 </div>
-                <div class="col-md-6 mb-3">
-                  <label class="form-label">Вместимость *</label>
-                  <input type="number" class="form-control" v-model="form.vmestimost" required>
+                <div class="col-md-4 mb-3">
+                  <label class="form-label">Вмест. 1 шт *</label>
+                  <input type="number" class="form-control" v-model="form.vmestimost" required min="1">
+                </div>
+                <div class="col-md-4 mb-3">
+                  <label class="form-label">Кол-во машин</label>
+                  <input type="number" class="form-control" v-model="form.kolvo_transporta" required min="1">
                 </div>
               </div>
               <div class="modal-footer px-0 pb-0">
@@ -114,7 +134,7 @@
 </template>
 
 <script>
-import { transferAPI } from '../services/api'
+import { transferAPI, konferentsiyaAPI } from '../services/api'
 import { Modal } from 'bootstrap'
 
 export default {
@@ -122,13 +142,16 @@ export default {
   data() {
     return {
       items: [],
+      konferentsiyas: [],
       searchQuery: '',
       tipFilter: '',
       form: {
         id: null,
         mesto_vstrechi: '',
         tip_transfera: 'автобус',
-        vmestimost: 20
+        vmestimost: 20,
+        kolvo_transporta: 1,
+        konferentsiya: null
       },
       isEdit: false,
       modal: null
@@ -137,6 +160,7 @@ export default {
   mounted() {
     this.modal = new Modal(this.$refs.modalRef)
     this.fetchData()
+    this.loadKonferentsiyas()
   },
   methods: {
     async fetchData() {
@@ -155,6 +179,14 @@ export default {
       } catch (error) {
         console.error('Ошибка загрузки:', error)
         alert('Не удалось загрузить данные')
+      }
+    },
+    async loadKonferentsiyas() {
+      try {
+        const response = await konferentsiyaAPI.getAll()
+        this.konferentsiyas = response.data.results || response.data
+      } catch (error) {
+        console.error('Ошибка загрузки конференций:', error)
       }
     },
     getTipLabel(tip) {
@@ -178,13 +210,19 @@ export default {
     openModal(item = null) {
       this.isEdit = !!item
       if (item) {
-        this.form = { ...item }
+        this.form = { 
+          ...item,
+          // Если поле пустое или null, ставим 1
+          kolvo_transporta: item.kolvo_transporta || 1 
+        }
       } else {
         this.form = {
           id: null,
           mesto_vstrechi: '',
           tip_transfera: 'автобус',
-          vmestimost: 20
+          vmestimost: 20,
+          kolvo_transporta: 1, // Значение по умолчанию
+          konferentsiya: null
         }
       }
       this.modal.show()

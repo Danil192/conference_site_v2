@@ -143,6 +143,7 @@ class Prozhivanie(models.Model):
 class Transfer(models.Model):
     mesto_vstrechi = models.CharField(max_length=255)
     vmestimost = models.PositiveIntegerField()
+    kolvo_transporta = models.PositiveIntegerField(default=1, verbose_name="Количество машин")
     tip_transfera = models.CharField(
         max_length=50,
         choices=[
@@ -175,13 +176,14 @@ class Transfer(models.Model):
         return f"{self.tip_transfera} — {self.mesto_vstrechi}"
 
     def save(self, *args, **kwargs):
-
         self.mesta_zanyaty = max(0, self.mesta_zanyaty)
-        if self.mesta_zanyaty > self.vmestimost:
-            self.mesta_zanyaty = self.vmestimost
-        
 
-        self.mesta_svobodnye = max(0, self.vmestimost - self.mesta_zanyaty)
+        total_limit = self.obshaya_vmestimost
+        
+        if self.mesta_zanyaty > total_limit:
+            self.mesta_zanyaty = total_limit
+        
+        self.mesta_svobodnye = max(0, total_limit - self.mesta_zanyaty)
         super().save(*args, **kwargs)
     
     @property
@@ -190,6 +192,13 @@ class Transfer(models.Model):
         if self.vmestimost == 0:
             return 0
         return round((self.mesta_zanyaty / self.vmestimost) * 100, 1)
+    
+    @property
+    def obshaya_vmestimost(self):
+        """Вместимость 1 машины * количество машин"""
+        if self.kolvo_transporta and self.kolvo_transporta > 0:
+            return self.vmestimost * self.kolvo_transporta
+        return self.vmestimost
 
 
 
@@ -420,7 +429,13 @@ class UchastnikTransfer(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
+        
+        if is_new:
+            if self.transfer.mesta_zanyaty >= self.transfer.obshaya_vmestimost:
+                raise ValidationError("Нет свободных мест в этом трансфере")
+        
         super().save(*args, **kwargs)
+        
         if is_new:
             self.transfer.mesta_zanyaty += 1
             self.transfer.save()

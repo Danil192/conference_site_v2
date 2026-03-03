@@ -874,16 +874,18 @@ class SettlementViewSet(viewsets.ViewSet):
         
         result = []
         for transfer in transfers:
-            result.append({
+             result.append({
                 'id': transfer.id,
                 'tip_transfera': transfer.tip_transfera,
                 'mesto_vstrechi': transfer.mesto_vstrechi,
-                'vmestimost': transfer.vmestimost,
+                
+                'vmestimost': transfer.obshaya_vmestimost, 
                 'mesta_zanyaty': transfer.mesta_zanyaty,
-                'mesta_svobodnye': max(0, transfer.vmestimost - transfer.mesta_zanyaty),
+                'mesta_svobodnye': max(0, transfer.obshaya_vmestimost - transfer.mesta_zanyaty),
+                
                 'procent_zanyatosti': round(
-                    (transfer.mesta_zanyaty / transfer.vmestimost * 100)
-                    if transfer.vmestimost > 0 else 0, 1
+                    (transfer.mesta_zanyaty / transfer.obshaya_vmestimost * 100)
+                    if transfer.obshaya_vmestimost > 0 else 0, 1
                 )
             })
         
@@ -916,7 +918,7 @@ class SettlementViewSet(viewsets.ViewSet):
         
         return Response(result)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='assign_transfer')
     def assign_transfer(self, request):
         """Назначить участника на трансфер"""
         uchastnik_id = request.data.get('uchastnik_id')
@@ -935,7 +937,8 @@ class SettlementViewSet(viewsets.ViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            free_places = transfer.vmestimost - transfer.mesta_zanyaty
+            free_places = transfer.obshaya_vmestimost - transfer.mesta_zanyaty
+
             if free_places <= 0:
                 return Response(
                     {'error': 'Нет свободных мест в этом трансфере'},
@@ -947,8 +950,7 @@ class SettlementViewSet(viewsets.ViewSet):
                 transfer=transfer
             )
             
-            transfer.mesta_zanyaty += 1
-            transfer.save()
+            transfer.refresh_from_db()
             
             return Response({
                 'success': True,
@@ -956,7 +958,7 @@ class SettlementViewSet(viewsets.ViewSet):
                 'transfer': {
                     'id': transfer.id,
                     'mesta_zanyaty': transfer.mesta_zanyaty,
-                    'mesta_svobodnye': max(0, transfer.vmestimost - transfer.mesta_zanyaty)
+                    'mesta_svobodnye': transfer.obshaya_vmestimost - transfer.mesta_zanyaty
                 }
             })
             
@@ -967,7 +969,7 @@ class SettlementViewSet(viewsets.ViewSet):
         except Exception as e:
             return Response({'error': str(e)}, status=400)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], url_path='unassign_transfer')
     def unassign_transfer(self, request):
         """Отменить назначение участника на трансфер"""
         uchastnik_id = request.data.get('uchastnik_id')

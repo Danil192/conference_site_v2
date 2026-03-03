@@ -87,11 +87,14 @@ class TransferSerializer(serializers.ModelSerializer):
     """Сериализатор трансфера с расчётом заполненности"""
     konferentsiya_nazvanie = serializers.CharField(source='konferentsiya.nazvanie', read_only=True)
     procent_zanyatosti = serializers.SerializerMethodField()
+    obshaya_vmestimost = serializers.ReadOnlyField()
     
     class Meta:
         model = Transfer
         fields = [
             'id', 'mesto_vstrechi', 'vmestimost', 'tip_transfera',
+            'kolvo_transporta',
+            'obshaya_vmestimost',
             'mesta_zanyaty', 'mesta_svobodnye', 'konferentsiya',
             'konferentsiya_nazvanie', 'procent_zanyatosti',
             'created_at', 'updated_at'
@@ -113,6 +116,7 @@ class UchastnikSerializer(serializers.ModelSerializer):
     tarif_nazvanie = serializers.CharField(source='tarif.nazvanie', read_only=True)
     has_prozhivanie = serializers.SerializerMethodField()
     prozhivanie_nazvanie = serializers.SerializerMethodField()
+    transfer_info = serializers.SerializerMethodField()
     
     class Meta:
         model = Uchastnik
@@ -124,6 +128,7 @@ class UchastnikSerializer(serializers.ModelSerializer):
             'nuzhen_transfer', 'tarif', 'tarif_nazvanie', 'oplata_polnaya',
             'nuzhen_prozhivanie', 'tip_prozhivaniya', 'preferencii',
             'data_zaseleniya', 'data_vyseleniya', 'has_prozhivanie', 'prozhivanie_nazvanie',
+            'transfer_info',
             'created_at', 'updated_at'
         ]
         read_only_fields = ('created_at', 'updated_at')
@@ -136,6 +141,12 @@ class UchastnikSerializer(serializers.ModelSerializer):
         svyaz = UchastnikProzhivanie.objects.filter(uchastnik=obj).first()
         if svyaz:
             return svyaz.prozhivanie.nazvanie
+        return None
+
+    def get_transfer_info(self, obj):
+        svyaz = UchastnikTransfer.objects.filter(uchastnik=obj).select_related('transfer').first()
+        if svyaz:
+            return f"{svyaz.transfer.tip_transfera} ({svyaz.transfer.mesto_vstrechi})"
         return None
 
 
