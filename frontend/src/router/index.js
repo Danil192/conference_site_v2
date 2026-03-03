@@ -12,6 +12,8 @@ import ProgramList from '../views/ProgramList.vue'
 import OtkazList from '../views/OtkazList.vue'
 import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
+import SystemUsersList from '../views/SystemUsersList.vue'
+import { useAuthStore } from '../stores/auth'
 
 const routes = [
     {
@@ -78,12 +80,29 @@ const routes = [
     path: '/otkazs',
     name: 'OtkazList',
     component: OtkazList
-  }
+  },
+  {
+    path: '/system-users',
+    name: 'SystemUsersList',
+    component: SystemUsersList,
+    meta: { requiresAdmin: true } 
+  },
 ]
 
 const router = createRouter({
   history: createWebHistory(),
   routes
+})
+
+router.beforeEach((to, from, next) => {
+  const authStore = useAuthStore()
+  
+  if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    alert('У вас нет прав для просмотра этой страницы!')
+    next('/')
+  } else {
+    next()
+  }
 })
 
 export default router

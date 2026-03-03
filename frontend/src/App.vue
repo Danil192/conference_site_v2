@@ -28,7 +28,9 @@
                 </div>
                 <div class="user-info">
                   <div class="user-name text-truncate">{{ authStore.user?.username }}</div>
-                  <div class="user-status">Оргкомитет</div>
+                  <div class="user-status">
+                    {{ authStore.user?.role === 'admin' ? 'Администратор' : 'Оргкомитет' }}
+                  </div>
                 </div>
               </div>
               <button @click="handleLogout" class="btn-logout">
@@ -107,6 +109,22 @@
             <span>Расписание</span>
           </router-link>
         </li>
+         <template v-if="authStore.user?.role === 'admin'">
+          <li class="nav-section">Администрирование</li>
+          <li>
+            <router-link to="/system-users" class="nav-link">
+              <i class="bi bi-person-lines-fill"></i>
+              <span>Пользователи системы</span>
+            </router-link>
+          </li>
+          <li>
+            <!-- Прямая ссылка на админку Django -->
+            <a href="http://localhost:8000/admin/" target="_blank" class="nav-link text-warning">
+              <i class="bi bi-gear-fill"></i>
+              <span>Django Админка</span>
+            </a>
+          </li>
+        </template>
       </ul>
       
       <div class="sidebar-footer">
