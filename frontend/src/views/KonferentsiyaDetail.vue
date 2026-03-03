@@ -119,11 +119,6 @@
           </button>
         </li>
         <li class="nav-item" role="presentation">
-          <button class="nav-link" data-bs-toggle="tab" data-bs-target="#program-tab" type="button">
-            <i class="bi bi-calendar-week"></i> Программа
-          </button>
-        </li>
-        <li class="nav-item" role="presentation">
           <button class="nav-link" data-bs-toggle="tab" data-bs-target="#logistics-tab" type="button">
             <i class="bi bi-truck"></i> Логистика
           </button>

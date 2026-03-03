@@ -25,6 +25,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import cm
 import io
+from django.conf import settings
 
 from .models import (
     Konferentsiya, Uchastnik, Prozhivanie, Transfer, Doklad,
@@ -987,8 +988,7 @@ class SettlementViewSet(viewsets.ViewSet):
             transfer = svyaz.transfer
             svyaz.delete()
             
-            transfer.mesta_zanyaty = max(0, transfer.mesta_zanyaty - 1)
-            transfer.save()
+            transfer.refresh_from_db() 
             
             return Response({
                 'success': True,
@@ -998,96 +998,91 @@ class SettlementViewSet(viewsets.ViewSet):
         except Uchastnik.DoesNotExist:
             return Response({'error': 'Участник не найден'}, status=404)
         except Exception as e:
-            return Response({'error': str(e)}, status=400)
+            # ВОТ ЗДЕСЬ БЫЛА ОШИБКА СО СКОБКОЙ:
+            return Response({'error': str(e)}, status=500)
 
 
 # ========== ГЕНЕРАЦИЯ PDF (ОТДЕЛЬНЫЙ КЛАСС) ==========
 
 class ProgramPDFView(APIView):
-    """Генерация программы конференции в PDF"""
     permission_classes = [permissions.AllowAny]
-    
+
     def get(self, request, konferentsiya_id):
         try:
-            font_path = os.path.join(os.path.dirname(__file__), '..', 'fonts', 'DejaVuSans.ttf')
-            
-            if not os.path.exists(font_path):
-                font_path = 'C:/Windows/Fonts/arial.ttf'
-            
-            try:
-                pdfmetrics.registerFont(TTFont('DejaVuSans', font_path))
-            except:
-                pass
-            
+            # 1. ОПРЕДЕЛЯЕМ ПУТИ К ШРИФТАМ (Указываем папку static)
+            base_fonts_path = os.path.join(settings.BASE_DIR, 'static')
+            regular_font = os.path.join(base_fonts_path, 'arial.ttf')
+            bold_font = os.path.join(base_fonts_path, 'arialbd.ttf')
+
+            # Проверяем наличие файлов, чтобы не было ошибки 500
+            if not os.path.exists(regular_font):
+                return Response({'error': f'Файл не найден по пути {regular_font}'}, status=500)
+
+            # Регистрируем шрифты в движке
+            pdfmetrics.registerFont(TTFont('ArialCustom', regular_font))
+            pdfmetrics.registerFont(TTFont('ArialCustom-Bold', bold_font))
+
+            # 2. РЕГИСТРИРУЕМ ИХ В КЭШЕ REPORTLAB
+            # Важно: регистрируем под именами 'Arial' и 'Arial-Bold'
+            if os.path.exists(regular_font):
+                pdfmetrics.registerFont(TTFont('Arial', regular_font))
+            else:
+                return Response({'error': f'Файл шрифта не найден по пути {regular_font}'}, status=500)
+                
+            if os.path.exists(bold_font):
+                pdfmetrics.registerFont(TTFont('Arial-Bold', bold_font))
+
+            # --- Логика данных (твоя рабочая часть) ---
             conference = Konferentsiya.objects.get(id=konferentsiya_id)
-            sections = Sekciya.objects.filter(konferentsiya=conference).order_by('nazvanie')
-            participants = Uchastnik.objects.filter(konferentsiya=conference)
+            from core.models import Programma
+            events = Programma.objects.filter(program__konferentsiya=conference).select_related('doklad', 'uchastnik', 'sekciya').order_by('vremya_nachala')
             
-            sections_data = []
-            total_reports = 0
-            
-            for section in sections:
-                reports = Doklad.objects.filter(
-                    uchastnik__sektsiya=section,
-                    uchastnik__konferentsiya=conference
-                ).select_related('uchastnik').order_by('nazvanie')
-                
-                reports_data = []
-                for report in reports:
-                    reports_data.append({
-                        'doklad_nazvanie': report.nazvanie or 'Доклад',
-                        'uchastnik_fio': f"{report.uchastnik.familiya} {report.uchastnik.name} {report.uchastnik.otchestvo}".strip(),
-                        'organizatsiya': report.uchastnik.organizatsiya,
-                        'gorod': report.uchastnik.gorod
-                    })
-                    total_reports += 1
-                
-                sections_data.append({
-                    'nazvanie': section.nazvanie,
-                    'reports': reports_data
+            schedule_data = {}
+            for event in events:
+                date_key = event.vremya_nachala.date()
+                if date_key not in schedule_data: schedule_data[date_key] = {}
+                sec_name = event.sekciya.nazvanie if event.sekciya else "Общая программа"
+                if sec_name not in schedule_data[date_key]: schedule_data[date_key][sec_name] = []
+                schedule_data[date_key][sec_name].append({
+                    'time_start': event.vremya_nachala,
+                    'doklad_nazvanie': event.doklad.nazvanie if event.doklad else "Мероприятие",
+                    'uchastnik_fio': f"{event.uchastnik.familiya} {event.uchastnik.name}" if event.uchastnik else "Организатор",
+                    'organizatsiya': event.uchastnik.organizatsiya if event.uchastnik else "",
                 })
-            
-            duration_days = (conference.data_okonchaniya - conference.data_nachala).days + 1
-            
+
+            final_schedule = []
+            for date in sorted(schedule_data.keys()):
+                days_sections = []
+                for sec, reps in schedule_data[date].items():
+                    days_sections.append({'nazvanie': sec, 'reports': reps})
+                final_schedule.append({'date': date, 'sections': days_sections})
+
             context = {
                 'conference': conference,
-                'sections': sections_data,
-                'duration_days': duration_days,
-                'participants_count': participants.count(),
-                'sections_count': sections.count(),
-                'reports_count': total_reports,
+                'schedule_by_days': final_schedule,
+                'participants_count': Uchastnik.objects.filter(konferentsiya=conference).count(),
+                'sections_count': Sekciya.objects.filter(konferentsiya=conference).count(),
+                'reports_count': events.count(),
                 'generated_at': timezone.now()
             }
             
+            # Рендеринг
             html_string = render_to_string('core/program_pdf.html', context)
-            
             response = HttpResponse(content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="program_{conference.id}.pdf"'
             
+            # ГЕНЕРАЦИЯ
             pisa_status = pisa.CreatePDF(
                 html_string,
                 dest=response,
-                encoding='utf-8',
-                default_css=DEFAULT_CSS + '''
-                    @font-face {
-                        font-family: "DejaVuSans";
-                        src: "file:///%s";
-                    }
-                    body {
-                        font-family: "DejaVuSans", Arial, sans-serif;
-                    }
-                ''' % font_path.replace('\\', '/')
+                encoding='utf-8'
             )
             
             if pisa_status.err:
-                return HttpResponse('Ошибка при генерации PDF', status=500)
-            
+                return HttpResponse('Ошибка генерации PDF', status=500)
             return response
             
-        except Konferentsiya.DoesNotExist:
-            return Response({'error': 'Конференция не найдена'}, status=404)
         except Exception as e:
             import traceback
-            print(f"PDF Error: {str(e)}")
             print(traceback.format_exc())
             return Response({'error': str(e)}, status=500)

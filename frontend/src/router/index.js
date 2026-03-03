@@ -10,8 +10,20 @@ import TransferList from '../views/TransferList.vue'
 import ProgrammaList from '../views/ProgrammaList.vue'
 import ProgramList from '../views/ProgramList.vue'
 import OtkazList from '../views/OtkazList.vue'
+import Login from '../views/Login.vue'
+import Register from '../views/Register.vue'
 
 const routes = [
+    {
+    path: '/login',
+    name: 'Login',
+    component: Login
+  },
+  {
+    path: '/register',
+    name: 'Register',
+    component: Register
+  },
   {
     path: '/',
     name: 'Dashboard',
