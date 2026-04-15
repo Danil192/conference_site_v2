@@ -96,13 +96,25 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
-  
+
+  const publicPages = ['/login', '/register']
+  const authRequired = !publicPages.includes(to.path)
+
+  if (authRequired && !authStore.isAuthenticated) {
+    return next('/login')
+  }
+
+  if (!authRequired && authStore.isAuthenticated) {
+    return next('/')
+  }
+
   if (to.meta.requiresAdmin && !authStore.isAdmin) {
     alert('У вас нет прав для просмотра этой страницы!')
-    next('/')
-  } else {
-    next()
+    return next('/')
   }
+
+  // Во всех остальных случаях разрешаем переход
+  next()
 })
 
 export default router

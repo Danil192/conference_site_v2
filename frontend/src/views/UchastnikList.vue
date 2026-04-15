@@ -437,35 +437,34 @@ export default {
       this.selectedFile = event.target.files[0]
       this.importStatus = null
     },
-    async uploadFile() {
-      if (!this.selectedFile) {
-        alert('Выберите файл')
-        return
-      }
-      
-      this.isUploading = true
-      this.importStatus = null
-      
-      try {
-        const response = await importAPI.participants(this.selectedFile)
-        this.importStatus = response.data
-        
-        if (response.data.success) {
-          setTimeout(() => {
-            this.closeImportModal()
-            this.fetchData()
-          }, 2000)
-        }
-      } catch (error) {
-        console.error('Ошибка импорта:', error)
-        this.importStatus = {
-          success: false,
-          error: error.response?.data?.error || 'Ошибка при импорте'
-        }
-      } finally {
-        this.isUploading = false
-      }
+   async uploadFile() {
+  if (!this.selectedFile) {
+    alert('Выберите файл')
+    return
+  }
+
+  this.isUploading = true
+  this.importStatus = null
+
+  try {
+    console.log('📤 Начало импорта:', this.selectedFile.name)
+    const response = await importAPI.participants(this.selectedFile)
+    console.log('📥 Ответ сервера:', response.data) // ← Логи в консоли браузера
+
+    this.importStatus = response.data
+
+    // ❌ УБРАЛИ setTimeout — окно не закроется само
+    // Пользователь сам закроет его кнопкой, чтобы прочитать результат
+  } catch (error) {
+    console.error('Ошибка импорта:', error)
+    this.importStatus = {
+      success: false,
+      error: error.response?.data?.error || error.message || 'Неизвестная ошибка сети'
     }
+  } finally {
+    this.isUploading = false
+  }
+}
   }
 }
 </script>

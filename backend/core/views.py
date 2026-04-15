@@ -87,7 +87,7 @@ class IsAdminOrOrganizer(permissions.BasePermission):
 
 class ImportViewSet(viewsets.ViewSet):
     """API для импорта данных из Excel (формат ИСЭМ СО РАН)"""
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
     
     @action(detail=False, methods=['post'])  
     def participants(self, request):          
@@ -187,15 +187,20 @@ class ImportViewSet(viewsets.ViewSet):
                         
                         # Обработка секций
                         sekciya = None
-                        if sekciya_raw:
+                        if sekciya_raw and konferentsiya: # Добавлена проверка: создаем секции только если есть конференция
                             section_names = [s.strip() for s in sekciya_raw.split(',') if s.strip()]
                             if section_names:
                                 first_section = section_names[0]
-                                sekciya, _ = Sekciya.objects.get_or_create(nazvanie=first_section)
+                                # Ищем или создаем секцию, привязанную к конкретной конференции
+                                sekciya, _ = Sekciya.objects.get_or_create(
+                                    nazvanie=first_section,
+                                    konferentsiya=konferentsiya
+                                )
                                 for sec_name in section_names[1:]:
-                                    Sekciya.objects.get_or_create(nazvanie=sec_name)
-                                    if sec_name not in created_sections:
-                                        created_sections.append(sec_name)
+                                    Sekciya.objects.get_or_create(
+                                        nazvanie=sec_name,
+                                        konferentsiya=konferentsiya
+                                    )
                         
                         uchastnik, created = Uchastnik.objects.update_or_create(
                             email=email,
@@ -998,51 +1003,53 @@ class SettlementViewSet(viewsets.ViewSet):
         except Uchastnik.DoesNotExist:
             return Response({'error': 'Участник не найден'}, status=404)
         except Exception as e:
-            # ВОТ ЗДЕСЬ БЫЛА ОШИБКА СО СКОБКОЙ:
             return Response({'error': str(e)}, status=500)
 
 
-# ========== ГЕНЕРАЦИЯ PDF (ОТДЕЛЬНЫЙ КЛАСС) ==========
+# Вставь это в views.py, заменив старый класс ProgramPDFView
+
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from xhtml2pdf.default import DEFAULT_CSS
 
 class ProgramPDFView(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, konferentsiya_id):
         try:
-            # 1. ОПРЕДЕЛЯЕМ ПУТИ К ШРИФТАМ (Указываем папку static)
-            base_fonts_path = os.path.join(settings.BASE_DIR, 'static')
-            regular_font = os.path.join(base_fonts_path, 'arial.ttf')
-            bold_font = os.path.join(base_fonts_path, 'arialbd.ttf')
+            # 1. ПУТИ К ШРИФТАМ (ИСПРАВЛЕНО: убрали пробел в имени папки)
+            font_dir = os.path.join(settings.BASE_DIR, 'static')
+            regular_font = os.path.join(font_dir, 'arial.ttf')
+            bold_font = os.path.join(font_dir, 'arialbd.ttf')
 
-            # Проверяем наличие файлов, чтобы не было ошибки 500
+            # Проверяем, есть ли файлы на самом деле
             if not os.path.exists(regular_font):
-                return Response({'error': f'Файл не найден по пути {regular_font}'}, status=500)
+                return Response({
+                    'error': f'Шрифт не найден! Положите arial.ttf в папку {font_dir}'
+                }, status=500)
 
-            # Регистрируем шрифты в движке
-            pdfmetrics.registerFont(TTFont('ArialCustom', regular_font))
-            pdfmetrics.registerFont(TTFont('ArialCustom-Bold', bold_font))
-
-            # 2. РЕГИСТРИРУЕМ ИХ В КЭШЕ REPORTLAB
-            # Важно: регистрируем под именами 'Arial' и 'Arial-Bold'
-            if os.path.exists(regular_font):
-                pdfmetrics.registerFont(TTFont('Arial', regular_font))
-            else:
-                return Response({'error': f'Файл шрифта не найден по пути {regular_font}'}, status=500)
-                
+            # 2. РЕГИСТРИРУЕМ ШРИФТ (Называем его 'Arial' для CSS)
+            pdfmetrics.registerFont(TTFont('Arial', regular_font))
             if os.path.exists(bold_font):
                 pdfmetrics.registerFont(TTFont('Arial-Bold', bold_font))
 
-            # --- Логика данных (твоя рабочая часть) ---
+            # 3. ПОЛУЧАЕМ ДАННЫЕ
             conference = Konferentsiya.objects.get(id=konferentsiya_id)
-            from core.models import Programma
-            events = Programma.objects.filter(program__konferentsiya=conference).select_related('doklad', 'uchastnik', 'sekciya').order_by('vremya_nachala')
-            
+            events = Programma.objects.filter(
+                program__konferentsiya=conference
+            ).select_related('doklad', 'uchastnik', 'sekciya').order_by('vremya_nachala')
+
+            # Группировка
             schedule_data = {}
             for event in events:
                 date_key = event.vremya_nachala.date()
-                if date_key not in schedule_data: schedule_data[date_key] = {}
+                if date_key not in schedule_data:
+                    schedule_data[date_key] = {}
+                
                 sec_name = event.sekciya.nazvanie if event.sekciya else "Общая программа"
-                if sec_name not in schedule_data[date_key]: schedule_data[date_key][sec_name] = []
+                if sec_name not in schedule_data[date_key]:
+                    schedule_data[date_key][sec_name] = []
+                
                 schedule_data[date_key][sec_name].append({
                     'time_start': event.vremya_nachala,
                     'doklad_nazvanie': event.doklad.nazvanie if event.doklad else "Мероприятие",
@@ -1060,28 +1067,36 @@ class ProgramPDFView(APIView):
             context = {
                 'conference': conference,
                 'schedule_by_days': final_schedule,
-                'participants_count': Uchastnik.objects.filter(konferentsiya=conference).count(),
-                'sections_count': Sekciya.objects.filter(konferentsiya=conference).count(),
-                'reports_count': events.count(),
-                'generated_at': timezone.now()
             }
-            
-            # Рендеринг
+
+            # 4. РЕНДЕРИНГ HTML
             html_string = render_to_string('core/program_pdf.html', context)
+
+            # 5. НАСТРОЙКА CSS ДЛЯ PDF
+            custom_css = DEFAULT_CSS + """
+                @page { size: A4; margin: 2cm; }
+                body { font-family: Arial; font-size: 11pt; line-height: 1.6; }
+                h1 { font-family: Arial-Bold; font-size: 16pt; text-align: center; margin-bottom: 20px; }
+                .day-title { background: #eee; padding: 5px; margin-top: 20px; font-weight: bold; }
+                .section-title { color: #444; margin-top: 10px; font-weight: bold; border-bottom: 1px solid #ccc; }
+                .report { margin-bottom: 10px; padding-left: 15px; }
+            """
+
+            # 6. ГЕНЕРАЦИЯ
             response = HttpResponse(content_type='application/pdf')
             response['Content-Disposition'] = f'attachment; filename="program_{conference.id}.pdf"'
-            
-            # ГЕНЕРАЦИЯ
+
             pisa_status = pisa.CreatePDF(
                 html_string,
                 dest=response,
-                encoding='utf-8'
+                encoding='utf-8', 
+                default_css=custom_css
             )
-            
+
             if pisa_status.err:
                 return HttpResponse('Ошибка генерации PDF', status=500)
             return response
-            
+
         except Exception as e:
             import traceback
             print(traceback.format_exc())

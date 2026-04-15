@@ -41,7 +41,7 @@
         </div>
       </div>
       
-      <ul class="nav-list">
+      <ul class="nav-list" v-if="authStore.isAuthenticated">
         <li>
           <router-link to="/" class="nav-link">
             <i class="bi bi-speedometer2"></i>
